@@ -1,0 +1,1 @@
+# viam-cropping-vision-service
