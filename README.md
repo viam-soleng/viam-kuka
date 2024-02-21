@@ -17,14 +17,16 @@ The Viam Cropping Vision Service (`visionsvc`) is a specialized module within th
 ## Configuration and Dependencies
 
 Sample Dependencies
-'''json
+
+```json
 "depends_on": [
       "camera",
       "age-vision",
       "gender-vision",
       "person-vision"
       ]
-'''
+```
+
 Sample Attributes:
 ```json
 {
