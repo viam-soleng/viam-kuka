@@ -1,80 +1,48 @@
-UNAME=$(shell uname)
-ifeq ($(UNAME),Linux)
-	NDK_ROOT ?= $(HOME)/Android/Sdk/ndk/26.2.11394342
-	HOST_OS ?= linux
-	GOARCH := amd64
-	CC_ARCH ?= x86_64
+BUILD_CHANNEL?=local
+OS=$(shell uname)
+VERSION=v1.12.0
+GIT_REVISION = $(shell git rev-parse HEAD | tr -d '\n')
+TAG_VERSION?=$(shell git tag --points-at | sort -Vr | head -n1)
+CGO_LDFLAGS="-L 'gen/third_party/rplidar_sdk-release-${VERSION}/sdk/output/${OS}/Release/'"
+GO_BUILD_LDFLAGS = -ldflags "-X 'main.Version=${TAG_VERSION}' -X 'main.GitRevision=${GIT_REVISION}'"
+GOPATH = $(HOME)/go/bin
+export PATH := ${GOPATH}:$(PATH) 
+SHELL := /usr/bin/env bash 
+
+default: setup build-module
+
+setup: install-dependencies
+
+install-dependencies:
+ifneq (, $(shell which brew))
+	brew update
+else ifneq (, $(shell which apt-get))
+	sudo apt-get update
 else
-	NDK_ROOT ?= $(HOME)/Library/Android/sdk/ndk/26.2.11394342
-	HOST_OS ?= darwin
-	GOARCH := arm64
-	CC_ARCH ?= aarch64
+	$(error "Unsupported system. Only apt and brew currently supported.")
 endif
 
-APP_ROOT ?= $(HOME)/AndroidStudioProjects/DroidCamera
+goformat:
+	go install golang.org/x/tools/cmd/goimports
+	gofmt -s -w .
+	goimports -w -local=go.viam.com/utils `go list -f '{{.Dir}}' ./... | grep -Ev "proto"`
 
-GOOS := android
-CGO_ENABLED := 1
-CC := $(shell realpath $(NDK_ROOT)/toolchains/llvm/prebuilt/$(HOST_OS)-x86_64/bin/$(CC_ARCH)-linux-android30-clang)
-CGO_CFLAGS := -I$(NDK_ROOT)/toolchains/llvm/prebuilt/$(HOST_OS)-x86_64/sysroot/usr/include \
-              -I$(NDK_ROOT)/toolchains/llvm/prebuilt/$(HOST_OS)-x86_64/sysroot/usr/include/$(CC_ARCH)-linux-android
-CGO_LDFLAGS := -L$(NDK_ROOT)/toolchains/llvm/prebuilt/$(HOST_OS)-x86_64/sysroot/usr/lib
-OUTPUT_DIR := bin
-OUTPUT_NAME := droidcamera-android-$(CC_ARCH)
-OUTPUT := $(OUTPUT_DIR)/$(OUTPUT_NAME)
+lint: goformat
+	go install github.com/edaniels/golinters/cmd/combined
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint
+	go install github.com/polyfloyd/go-errorlint
+	go list -f '{{.Dir}}' ./... | grep -v gen | xargs go vet -vettool=`go env GOPATH`/bin/combined
+	go list -f '{{.Dir}}' ./... | grep -v gen | xargs `go env GOPATH`/bin/go-errorlint -errorf
+	go list -f '{{.Dir}}' ./... | grep -v gen | xargs go run github.com/golangci/golangci-lint/cmd/golangci-lint run -v --config=./etc/.golangci.yaml
 
-ASSET_PATH := $(APP_ROOT)/app/src/main/assets/$(OUTPUT_NAME)
-BINARY_PATH := /data/local/tmp/$(OUTPUT_NAME)
+build-module:
+	mkdir -p bin &&  go build $(GO_BUILD_LDFLAGS) -o bin/viam-kuka-module module.go
 
-TARGET := android
-ANDROID_API := 29
-MOBILE_OUTPUT_NAME := droidcam.aar
-MOBILE_OUTPUT := $(OUTPUT_DIR)/$(MOBILE_OUTPUT_NAME)
+install:
+	sudo cp bin/viam-kuka-module /usr/local/bin/viam-kuka-module
 
-MODULE_VERSION := 0.0.3
+test: swig
+	go test -v -coverprofile=coverage.txt -covermode=atomic ./... -race
 
-# Build the arm64 module binary
-build-binary:
-	@echo "Building binary for Android..."
-	@GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) \
-		CGO_CFLAGS="$(CGO_CFLAGS)" \
-		CGO_LDFLAGS="$(CGO_LDFLAGS)" \
-		CC=$(CC) \
-		go build -v -tags local_cgo,no_cgo \
-		-o $(OUTPUT) .
-	@echo "Build complete: $(OUTPUT)"
-
-# Build the mobile library
-build-mobile:
-	@echo "Building mobile library..."
-	@gomobile bind -v -target $(TARGET) -androidapi $(ANDROID_API) -o $(MOBILE_OUTPUT) ./camera/
-	@echo "Mobile library built: $(MOBILE_OUTPUT)"
-
-# Push the binary to device
-push-binary:
-	@echo "Pushing binary to device..."
-	@adb push $(OUTPUT) $(BINARY_PATH)
-	@echo "Binary pushed: $(BINARY_PATH)"
-
-# Push the module to viam registry
-push-module:
-	@echo "Pushing module to viam registry..."
-	@viam module upload --platform=android/arm64 --version=$(MODULE_VERSION) $(OUTPUT)
-	@echo "Module pushed: $(OUTPUT)"
-
-# Copy the binary to project assets
-push-asset:
-	@echo "Copying binary to project assets..."
-	@cp $(OUTPUT) $(ASSET_PATH)
-	@echo "Binary copied to assets: $(ASSET_PATH)"
-
-# Enable root access and set SELinux to permissive
-root:
-	@echo "Enabling root access and setting SELinux to permissive..."
-	@adb root && adb shell "setenforce 0"
-	@echo "Root access enabled and SELinux set to permissive."
-
-# Filter logcat for camera logs
-logs:
-	@echo "Filtering logcat for camera logs..."
-	@adb logcat -s camera
+clean: 
+	rm -rf bin
