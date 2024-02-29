@@ -76,7 +76,7 @@ func (kuka *kukaArm) Reconfigure(ctx context.Context, deps resource.Dependencies
 	}
 
 	// Attempt to connect to hardware
-	if err := kuka.Connect(); err != nil {
+	if err := kuka.Connect(ctx); err != nil {
 		return err
 	}
 
