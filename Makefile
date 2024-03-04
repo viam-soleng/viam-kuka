@@ -3,13 +3,12 @@ OS=$(shell uname)
 VERSION=v1.12.0
 GIT_REVISION = $(shell git rev-parse HEAD | tr -d '\n')
 TAG_VERSION?=$(shell git tag --points-at | sort -Vr | head -n1)
-CGO_LDFLAGS="-L 'gen/third_party/rplidar_sdk-release-${VERSION}/sdk/output/${OS}/Release/'"
 GO_BUILD_LDFLAGS = -ldflags "-X 'main.Version=${TAG_VERSION}' -X 'main.GitRevision=${GIT_REVISION}'"
 GOPATH = $(HOME)/go/bin
 export PATH := ${GOPATH}:$(PATH) 
 SHELL := /usr/bin/env bash 
 
-default: setup build-module
+default: setup build
 
 setup: install-dependencies
 
@@ -35,7 +34,7 @@ lint: goformat
 	go list -f '{{.Dir}}' ./... | grep -v gen | xargs `go env GOPATH`/bin/go-errorlint -errorf
 	go list -f '{{.Dir}}' ./... | grep -v gen | xargs go run github.com/golangci/golangci-lint/cmd/golangci-lint run -v --config=./etc/.golangci.yaml
 
-build-module:
+build:
 	mkdir -p bin &&  go build $(GO_BUILD_LDFLAGS) -o bin/viam-kuka-module module.go
 
 install:

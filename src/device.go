@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+const (
+	defaultReadBufSize int = 8192
+)
+
 var (
 	connectionTimeout time.Duration = 5 * time.Second
 )
@@ -14,23 +18,26 @@ var (
 // Connect to the Kuka Arm via TCP dialer
 func (kuka *kukaArm) Connect(ctx context.Context) error {
 
+	// Close any prior connections
 	if kuka.conn != nil {
 		if err := kuka.Disconnect(); err != nil {
 			return err
 		}
 	}
 
+	// Attempt to dial the TCP server
 	ctx, ctxCancel := context.WithTimeout(ctx, connectionTimeout)
 	defer ctxCancel()
 
-	// Dial the tcp server at the given (or default) address
 	var d net.Dialer
-	conn, err := d.DialContext(ctx, "tcp", fmt.Sprintf(":%v", kuka.tcp_port))
+	address := fmt.Sprintf("%v:%v", kuka.ip_address, kuka.tcp_port)
+	conn, err := d.DialContext(ctx, "tcp", address)
 	if err != nil {
 		return err
 	}
-	kuka.conn = conn
 
+	kuka.logger.Infof("Connected to device at %v", address)
+	kuka.conn = conn
 	return nil
 }
 
@@ -45,9 +52,24 @@ func (kuka *kukaArm) Disconnect() error {
 
 // Write to TCP dialer
 func (kuka *kukaArm) Write(command []byte) error {
+	kuka.logger.Infof("Sending command: %v", string(command))
 	if _, err := kuka.conn.Write(command); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (kuka *kukaArm) Read() ([]byte, error) {
+
+	recv := make([]byte, defaultReadBufSize)
+	n, err := kuka.conn.Read(recv)
+	if err != nil {
+		return nil, err
+	}
+
+	response := recv[:n]
+	kuka.logger.Infof("Received response: %v", string(response))
+
+	return response, nil
 }
