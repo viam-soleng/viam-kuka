@@ -38,6 +38,7 @@ func (kuka *kukaArm) Connect(ctx context.Context) error {
 
 	kuka.logger.Infof("Connected to device at %v", address)
 	kuka.conn = conn
+
 	return nil
 }
 
@@ -52,6 +53,9 @@ func (kuka *kukaArm) Disconnect() error {
 
 // Write to TCP dialer
 func (kuka *kukaArm) Write(command []byte) error {
+	kuka.tcpMutex.Lock()
+	defer kuka.tcpMutex.Unlock()
+
 	kuka.logger.Infof("Sending command: %v", string(command))
 	if _, err := kuka.conn.Write(command); err != nil {
 		return err
@@ -61,10 +65,17 @@ func (kuka *kukaArm) Write(command []byte) error {
 }
 
 func (kuka *kukaArm) Read() ([]byte, error) {
+	kuka.tcpMutex.Lock()
+	defer kuka.tcpMutex.Unlock()
 
+	kuka.conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 	recv := make([]byte, defaultReadBufSize)
 	n, err := kuka.conn.Read(recv)
 	if err != nil {
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			return nil, nil
+		}
+		fmt.Printf("RECV: %v | ERR: %v \n", recv, err)
 		return nil, err
 	}
 
