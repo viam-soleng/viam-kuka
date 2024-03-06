@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
+	"time"
 
-	"github.com/golang/geo/r3"
 	"github.com/pkg/errors"
+	ekiCommand "github.com/viam-soleng/viam-kuka/src/ekicommands"
 
 	pb "go.viam.com/api/component/arm/v1"
 	"go.viam.com/rdk/components/arm"
@@ -14,23 +16,28 @@ import (
 	"go.viam.com/rdk/referenceframe"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/spatialmath"
-	"go.viam.com/rdk/utils"
 )
 
 const (
-	numJoints        int    = 6
-	defaultTCPPort   int    = 54610
-	defaultIPAddress string = "10.1.4.212"
+	numJoints         int    = 6
+	numExternalJoints int    = 6
+	defaultTCPPort    int    = 54610
+	defaultIPAddress  string = "10.1.4.212"
+	defaultModel      string = "KR5_ACR"
 )
 
 var (
 	errUnimplemented = errors.New("unimplemented")
 	Model            = resource.NewModel("sol-eng", "arm", "kuka")
+
+	motionTimeout time.Duration = 30 * time.Second
 )
 
 type Config struct {
 	IPAddress string `json:"ip_address,omitempty"`
 	Port      int    `json:"port,omitempty"`
+	Model     string `json:"model,omitempty"`
+	SafeMode  bool   `json:"safe_mode,omitempty"`
 }
 
 type jointLimit struct {
@@ -38,7 +45,16 @@ type jointLimit struct {
 	max float64
 }
 
-type device struct {
+type state struct {
+	endEffectorPose spatialmath.Pose
+	joints          []float64
+	isMoving        bool
+
+	programState ekiCommand.ProgramStatus
+	programName  string
+}
+
+type deviceInfo struct {
 	name            string
 	serialNum       string
 	robotType       string
@@ -47,16 +63,23 @@ type device struct {
 }
 
 type kukaArm struct {
-	Named  resource.Named
+	resource.Named
 	logger logging.Logger
 
-	deviceInfo  device
-	jointLimits []jointLimit
-	isMoving    bool
+	deviceInfo              deviceInfo
+	model                   referenceframe.Model
+	jointLimits             []jointLimit
+	closed                  bool
+	safeMode                bool
+	activeBackgroundWorkers *sync.WaitGroup
+
+	currentState *state
+	stateMutex   *sync.Mutex
 
 	ip_address string
 	tcp_port   int
 	conn       net.Conn
+	tcpMutex   *sync.Mutex
 }
 
 func init() {
@@ -72,11 +95,17 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 	return nil, nil
 }
 
+// newKukaArm creates a new Kuka arm.
 func newKukaArm(ctx context.Context, deps resource.Dependencies, conf resource.Config, logger logging.Logger) (arm.Arm, error) {
 
 	kuka := kukaArm{
-		Named:  conf.ResourceName().AsNamed(),
-		logger: logger,
+		Named:      conf.ResourceName().AsNamed(),
+		logger:     logger,
+		deviceInfo: deviceInfo{},
+
+		activeBackgroundWorkers: &sync.WaitGroup{},
+		tcpMutex:                &sync.Mutex{},
+		stateMutex:              &sync.Mutex{},
 	}
 
 	if err := kuka.Reconfigure(ctx, deps, conf); err != nil {
@@ -93,19 +122,13 @@ func (kuka *kukaArm) Reconfigure(ctx context.Context, deps resource.Dependencies
 		return err
 	}
 
-	// Parse config
-	if newConf.IPAddress != "" {
-		kuka.ip_address = newConf.IPAddress
-	} else {
-		kuka.logger.Debugf("No ip address given, attempting to connect via default ip %v", defaultIPAddress)
-		kuka.ip_address = defaultIPAddress
-	}
+	// Reset robot
+	kuka.currentState = &state{}
+	kuka.jointLimits = make([]jointLimit, numJoints)
 
-	if newConf.Port != 0 {
-		kuka.tcp_port = newConf.Port
-	} else {
-		kuka.logger.Debugf("No port given, attempting to connect on default port %v", defaultTCPPort)
-		kuka.tcp_port = defaultTCPPort
+	// Parse config
+	if err := kuka.parseConfig(newConf); err != nil {
+		return err
 	}
 
 	// Attempt to connect to hardware
@@ -113,176 +136,153 @@ func (kuka *kukaArm) Reconfigure(ctx context.Context, deps resource.Dependencies
 		return err
 	}
 
-	// Get device info
-	deviceInfo, err := kuka.getDeviceInfo()
-	if err != nil {
+	// Start background monitor of logs from kuka device
+	if err := kuka.startResponseMonitor(); err != nil {
 		return err
 	}
-	fmt.Println("deviceInfo: ", deviceInfo)
-	kuka.deviceInfo = deviceInfo
 
-	// Get joint limits
-	jointLimits, err := kuka.getJointLimits()
+	// Get device info
+	if err := kuka.getDeviceInfo(); err != nil {
+		return err
+	}
+
+	kuka.logger.Debugf("Device Info: %v", kuka.getDeviceInfo())
+
+	// Check program state
+	programState, err := kuka.checkEKIProgramState()
 	if err != nil {
 		return err
 	}
-	fmt.Println("jointLimitsInfo: ", jointLimits)
-	kuka.jointLimits = jointLimits
+	if programState != ekiCommand.StatusRunning {
+		return errors.Errorf("associated program on your kuka device is %v, please get the program running before continuing", programState)
+	}
 
 	return nil
 }
 
-// The close method is executed when the component is shut down
+// The close method is executed when the component is shut down.
 func (kuka *kukaArm) Close(ctx context.Context) error {
+	kuka.closed = true
+
+	// Wait for mutexes
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
+
+	kuka.tcpMutex.Lock()
+	defer kuka.tcpMutex.Unlock()
+
+	// Wait for background process to end
+	kuka.activeBackgroundWorkers.Wait()
+
+	// Disconnect tcp connection
 	if err := kuka.Disconnect(); err != nil {
 		return err
 	}
-
 	return nil
 }
 
-// Name TBD
-func (kuka *kukaArm) Name() resource.Name {
-	return resource.Name{}
-}
-
-// CurrentInputs TBD
+// CurrentInputs returns the current joint positions in the form of Inputs.
 func (kuka *kukaArm) CurrentInputs(ctx context.Context) ([]referenceframe.Input, error) {
-	fmt.Println("currentinputs")
-	return nil, errUnimplemented
+	return kuka.model.InputFromProtobuf(&pb.JointPositions{Values: kuka.getCurrentStateSafe().joints}), nil
+
 }
 
-// GoToInputs TBD
-func (kuka *kukaArm) GoToInputs(context.Context, ...[]referenceframe.Input) error {
-	fmt.Println("gotoinputs")
-	return errUnimplemented
+// GoToInputs moves through the given inputSteps using sequential calls to MoveJointPosition.
+func (kuka *kukaArm) GoToInputs(ctx context.Context, inputSteps ...[]referenceframe.Input) error {
+	for _, goal := range inputSteps {
+		if !kuka.getCurrentStateSafe().isMoving {
+			if err := kuka.MoveToJointPositions(ctx, kuka.model.ProtobufFromInput(goal), nil); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // EndPosition returns the current position of the arm.
 func (kuka *kukaArm) EndPosition(ctx context.Context, extra map[string]interface{}) (spatialmath.Pose, error) {
-
-	// Send command
-	response, err := kuka.sendCommand(getEndPositionEKICommand, "")
-	if err != nil {
-		return nil, err
-	}
-
-	// Parse response
-	endPosData, err := parseEKLResponseToFloats(response)
-	if err != nil {
-		return nil, err
-	}
-
-	pose := spatialmath.NewPose(r3.Vector{X: endPosData[0], Y: endPosData[1], Z: endPosData[2]},
-		&spatialmath.EulerAngles{
-			Yaw:   utils.RadToDeg(endPosData[3]),
-			Pitch: utils.RadToDeg(endPosData[4]),
-			Roll:  utils.RadToDeg(endPosData[5]),
-		},
-	)
-
-	return pose, nil
+	return kuka.getCurrentStateSafe().endEffectorPose, nil
 }
 
 // JointPositions returns the current joint positions of the arm.
 func (kuka *kukaArm) JointPositions(ctx context.Context, extra map[string]interface{}) (*pb.JointPositions, error) {
-
-	// Send command
-	response, err := kuka.sendCommand(getJointPositionEKICommand, "")
-	if err != nil {
-		return nil, err
-	}
-
-	// Parse response
-	jointPosData, err := parseEKLResponseToFloats(response)
-	if err != nil {
-		return nil, err
-	}
-
-	jointPos := make([]float64, numJoints)
-	for i := 1; i < numJoints; i++ {
-		jointPos[i] = utils.RadToDeg(jointPosData[i])
-	}
-
-	return &pb.JointPositions{Values: jointPos}, nil
+	return &pb.JointPositions{Values: kuka.getCurrentStateSafe().joints}, nil
 }
 
 // MoveToPosition moves the arm to the given absolute position. This will block until done or a new operation cancels this one.
+// This calls arm Move command that uses motion planning to make subsequent MoveToJointPositions to reach goal position.
 func (kuka *kukaArm) MoveToPosition(ctx context.Context, pose spatialmath.Pose, extra map[string]interface{}) error {
-	fmt.Println("MoveToPosition")
-	return errUnimplemented
+	return arm.Move(ctx, kuka.logger, kuka, pose)
 }
 
 // MoveToJointPositions moves the arm's joints to the given positions. This will block until done or a new operation cancels this one.
 func (kuka *kukaArm) MoveToJointPositions(ctx context.Context, positionDegs *pb.JointPositions, extra map[string]interface{}) error {
-	fmt.Println("HIIIII")
+
 	desiredJointPositions := positionDegs.Values
 
 	// Check validity of action based on joint limit
-	for i := 0; i < numJoints; i++ {
-		tempJointPos := utils.RadToDeg(desiredJointPositions[i])
-		if tempJointPos <= kuka.jointLimits[i].min || tempJointPos >= kuka.jointLimits[i].max {
-			return errors.Errorf("invalid joint position specified,  %v is outside of joint[%v] limits [%v, %v]",
-				desiredJointPositions[i], i, kuka.jointLimits[i].min, kuka.jointLimits[i].max)
-		}
-	}
-
-	// Send command
-	stringifyJoints := fmt.Sprintf("%v,%v,%v,%v,%v,%v",
-		utils.RadToDeg(desiredJointPositions[0]),
-		utils.RadToDeg(desiredJointPositions[1]),
-		utils.RadToDeg(desiredJointPositions[2]),
-		utils.RadToDeg(desiredJointPositions[3]),
-		utils.RadToDeg(desiredJointPositions[4]),
-		utils.RadToDeg(desiredJointPositions[5]),
-	)
-
-	kuka.isMoving = true
-	response, err := kuka.sendCommand(setJointPositionEKICommand, fmt.Sprintf("%v,0,0,0,0,0,0", stringifyJoints))
-	if err != nil {
+	if err := kuka.checkDesiredJointPositions(desiredJointPositions); err != nil {
 		return err
 	}
 
-	if response != "success" {
-		return errors.Errorf("move command was sent but response was unsuccessful: %v", response)
+	stringifyJoints := fmt.Sprintf("%v,%v,%v,%v,%v,%v",
+		desiredJointPositions[0],
+		desiredJointPositions[1],
+		desiredJointPositions[2],
+		desiredJointPositions[3],
+		desiredJointPositions[4],
+		desiredJointPositions[5],
+	)
+
+	// Check EKI program state before issuing move command
+	programState, err := kuka.checkEKIProgramState()
+	if err != nil {
+		return err
+	}
+	if programState != ekiCommand.StatusRunning {
+		return errors.Errorf("associated program on your kuka device is %v, please get the program running before continuing", programState)
 	}
 
-	kuka.isMoving = false
+	// Send command
+	kuka.stateMutex.Lock()
+	kuka.currentState.isMoving = true
+	kuka.stateMutex.Unlock()
+	if err := kuka.sendCommand(ekiCommand.SetJointPosition, fmt.Sprintf("%v,0,0,0,0,0,0", stringifyJoints)); err != nil {
+		return err
+	}
+
+	// Loop until operation ends
+	kuka.updateStateLoop()
 
 	return nil
 }
 
-// CurrentInputs TBD
+// IsMoving returns if the arm is in motion.
 func (kuka *kukaArm) IsMoving(context.Context) (bool, error) {
-	return kuka.isMoving, nil
+	return kuka.getCurrentStateSafe().isMoving, nil
 }
 
 // Stop TBD
 func (kuka *kukaArm) Stop(ctx context.Context, extra map[string]interface{}) error {
-
-	err := kuka.MoveToJointPositions(ctx, &pb.JointPositions{Values: []float64{0, utils.DegToRad(-80), utils.DegToRad(90), 0, 0, 0}}, extra)
-	if err != nil {
-		return err
-	}
 	fmt.Println("Stop")
 	return errUnimplemented
 }
 
 // DoCommand can be implemented to extend functionality but returns unimplemented currently.
 func (kuka *kukaArm) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
-
 	command, ok := cmd["cmd"].(string)
 	if !ok {
 		return nil, errors.Errorf("error, request value (%v) was not a string", cmd["cmd"])
 	}
 
-	if err := kuka.Write([]byte(command)); err != nil {
-		return nil, err
-	}
-
-	_, err := kuka.Read()
-	if err != nil {
-		return nil, err
+	if command == "settestjointposition1" {
+		kuka.MoveToJointPositions(ctx, &pb.JointPositions{Values: []float64{0, -50, 120, 0, 0, 0}}, nil)
+	} else if command == "settestjointposition2" {
+		kuka.MoveToJointPositions(ctx, &pb.JointPositions{Values: []float64{0, -90, 90, 0, 0, 0}}, nil)
+	} else {
+		if err := kuka.Write([]byte(command)); err != nil {
+			return nil, err
+		}
 	}
 
 	return nil, nil
@@ -290,12 +290,19 @@ func (kuka *kukaArm) DoCommand(ctx context.Context, cmd map[string]interface{}) 
 
 // ModelFrame returns a simple model frame for the Kuka arm.
 func (kuka *kukaArm) ModelFrame() referenceframe.Model {
-	model := referenceframe.NewSimpleModel(kuka.Named.Name().ShortName())
-	return model
+	return kuka.model
 }
 
-// Geometries TBD
-func (kuka *kukaArm) Geometries(context.Context, map[string]interface{}) ([]spatialmath.Geometry, error) {
-	fmt.Println("Geometries")
-	return nil, errUnimplemented
+// Geometries returns a list of geometries associated with the specified kuka arm.
+func (kuka *kukaArm) Geometries(ctx context.Context, extra map[string]interface{}) ([]spatialmath.Geometry, error) {
+	inputs, err := kuka.CurrentInputs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	geometries, err := kuka.model.Geometries(inputs)
+	if err != nil {
+		return nil, err
+	}
+
+	return geometries.Geometries(), nil
 }
