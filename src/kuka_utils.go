@@ -10,6 +10,11 @@ import (
 	"go.viam.com/rdk/referenceframe/urdf"
 )
 
+var (
+	sendInfoCommandSleep time.Duration = 200 * time.Millisecond
+	//sendActionCommandSleep time.Duration = 1 * time.Millisecond
+)
+
 // ResolveFile returns the path of the given file relative to the root
 // of the codebase. For example, if this file currently
 // lives in utils/file.go and ./foo/bar/baz is given, then the result
@@ -27,7 +32,6 @@ func resolveFile(fn string) string {
 }
 
 func (kuka *kukaArm) sendCommand(EKICommand, args string) error {
-
 	var command string
 	if args != "" {
 		command = fmt.Sprintf("%v,%v;", EKICommand, args)
@@ -71,6 +75,8 @@ func (kuka *kukaArm) parseConfig(newConf *Config) error {
 		return err
 	}
 	kuka.model = urdfModel
+
+	kuka.safeMode = newConf.SafeMode
 
 	return nil
 }
@@ -142,15 +148,10 @@ func (kuka *kukaArm) updateState() error {
 }
 
 func (kuka *kukaArm) updateStateLoop() {
+	startTime := time.Now()
+
 	for {
-		if kuka.closed {
-			break
-		}
-		kuka.stateMutex.Lock()
-		isMoving := kuka.currentState.isMoving
-		kuka.stateMutex.Unlock()
-		fmt.Println("[hiya] isMoving: ", isMoving)
-		if !isMoving {
+		if kuka.closed || !kuka.getIsMovingSafe() || time.Now().After(startTime.Add(motionTimeout)) {
 			break
 		}
 
@@ -158,4 +159,43 @@ func (kuka *kukaArm) updateStateLoop() {
 			kuka.logger.Warnf("error updating status: %v", err)
 		}
 	}
+}
+
+func (kuka *kukaArm) getIsMovingSafe() bool {
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
+	return kuka.currentState.isMoving
+}
+
+func (kuka *kukaArm) setIsMovingSafe(isMoving bool) {
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
+	kuka.currentState.isMoving = isMoving
+}
+
+func (kuka *kukaArm) checkEKIProgramState() (ProgramStatus, error) {
+
+	kuka.stateMutex.Lock()
+	kuka.currentState.programState = statusUnknown
+	kuka.stateMutex.Unlock()
+
+	if err := kuka.sendCommand(getEKIProgramState, ""); err != nil {
+		return statusUnknown, err
+	}
+
+	// Wait until response is returned
+	startTime := time.Now()
+
+	var programState ProgramStatus
+	for {
+		kuka.stateMutex.Lock()
+		programState = kuka.currentState.programState
+		kuka.stateMutex.Unlock()
+
+		if programState != statusUnknown || time.Now().After(startTime.Add(1*time.Second)) {
+			break
+		}
+	}
+
+	return programState, nil
 }

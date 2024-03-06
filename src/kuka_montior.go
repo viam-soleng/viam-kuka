@@ -33,31 +33,24 @@ func (kuka *kukaArm) responseMonitor() {
 		if err != nil {
 			kuka.logger.Warnf("error reading line: %v", err)
 		}
-
 		if data == nil {
-			fmt.Println("empty")
 			continue
 		}
 
-		dataStr := string(data[:len(data)-1])
-
-		kuka.logger.Infof("FROM KUKA: %v\n", dataStr)
-
-		dataList := strings.Split(dataStr, ",")
-
+		// Extract command and arguments from response
+		dataList := strings.Split(string(data[:len(data)-1]), ",")
 		dataCommand := dataList[0]
 		dataArgs := dataList[1:]
 
+		// Check for success status
 		if len(dataArgs) > 0 {
 			if dataArgs[0] == "success" {
-				fmt.Println("handling success")
-				kuka.stateMutex.Lock()
-				kuka.currentState.isMoving = false
-				kuka.stateMutex.Unlock()
+				kuka.setIsMovingSafe(false)
 				continue
 			}
 		}
 
+		// Handle responses to commands
 		switch dataCommand {
 		// Get robot info
 		case getRobotNameEKICommand:
@@ -70,6 +63,8 @@ func (kuka *kukaArm) responseMonitor() {
 			kuka.handleRobotSoftwareVersion(dataArgs)
 		case getOperatingModeEKICommand:
 			kuka.handleRobotOperatingMode(dataArgs)
+		case getEKIProgramState:
+			kuka.handleProgramState(dataArgs)
 		// Get robot status
 		case getJointPositionEKICommand:
 			kuka.handleGetJointPositions(dataArgs)
@@ -92,7 +87,7 @@ func (kuka *kukaArm) responseMonitor() {
 func (kuka *kukaArm) handleRobotName(data []string) {
 	kuka.logger.Infof(" - Robot Name: %v", data[0])
 	if len(data) != 1 {
-		kuka.logger.Warnf("incorrect amount of data returned for robot name: %v", data)
+		kuka.logger.Warnf("incorrect amount of data returned for robot name: %v  (should be 1)", data)
 		return
 	}
 	kuka.deviceInfo.name = data[0]
@@ -101,7 +96,7 @@ func (kuka *kukaArm) handleRobotName(data []string) {
 func (kuka *kukaArm) handleRobotSerialNumber(data []string) {
 	kuka.logger.Infof(" - Robot Serial Number: %v", data[0])
 	if len(data) != 1 {
-		kuka.logger.Warnf("incorrect amount of data returned for robot serial number: %v", data)
+		kuka.logger.Warnf("incorrect amount of data returned for robot serial number: %v  (should be 1)", data)
 		return
 	}
 	kuka.deviceInfo.serialNum = data[0]
@@ -110,7 +105,7 @@ func (kuka *kukaArm) handleRobotSerialNumber(data []string) {
 func (kuka *kukaArm) handleRobotType(data []string) {
 	kuka.logger.Infof(" - Robot Type: %v", data[0])
 	if len(data) != 1 {
-		kuka.logger.Warnf("incorrect amount of data returned for robot type: %v", data)
+		kuka.logger.Warnf("incorrect amount of data returned for robot type: %v  (should be 1)", data)
 		return
 	}
 	kuka.deviceInfo.robotType = data[0]
@@ -119,7 +114,7 @@ func (kuka *kukaArm) handleRobotType(data []string) {
 func (kuka *kukaArm) handleRobotSoftwareVersion(data []string) {
 	kuka.logger.Infof(" - Robot Software Version: %v", data[0])
 	if len(data) != 1 {
-		kuka.logger.Warnf("incorrect amount of data returned for robot software version mode: %v", data)
+		kuka.logger.Warnf("incorrect amount of data returned for robot software version mode: %v  (should be 1)", data)
 		return
 	}
 	kuka.deviceInfo.softwareVersion = data[0]
@@ -128,7 +123,7 @@ func (kuka *kukaArm) handleRobotSoftwareVersion(data []string) {
 func (kuka *kukaArm) handleRobotOperatingMode(data []string) {
 	kuka.logger.Infof(" - Robot Operating Mode: %v", data[0])
 	if len(data) != 1 {
-		kuka.logger.Warnf("incorrect amount of data returned for robot operating mode: %v", data)
+		kuka.logger.Warnf("incorrect amount of data returned for robot operating mode: %v  (should be 1)", data)
 		return
 	}
 	kuka.deviceInfo.operatingMode = data[0]
@@ -137,10 +132,13 @@ func (kuka *kukaArm) handleRobotOperatingMode(data []string) {
 // Get robot status
 func (kuka *kukaArm) handleMinJointPositions(data []string) {
 	if len(data) != numJoints+numExternalJoints {
-		kuka.logger.Warnf("incorrect amount of data returned for negative joint position limits: %v", data)
+		kuka.logger.Warnf("incorrect amount of data returned for negative joint position limits: %v  (should be 12)", data)
 		return
 	}
 
+	// Parse data and update current state
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
 	for i := 0; i < numJoints; i++ {
 		c, err := strconv.ParseFloat(data[i], 64)
 		if err != nil {
@@ -152,10 +150,13 @@ func (kuka *kukaArm) handleMinJointPositions(data []string) {
 
 func (kuka *kukaArm) handleMaxJointPositions(data []string) {
 	if len(data) != numJoints+numExternalJoints {
-		kuka.logger.Warnf("incorrect amount of data returned for positive joint position limits: %v", data)
+		kuka.logger.Warnf("incorrect amount of data returned for positive joint position limits: %v  (should be 12)", data)
 		return
 	}
 
+	// Parse data andpdate current state
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
 	for i := 0; i < numJoints; i++ {
 		c, err := strconv.ParseFloat(data[i], 64)
 		if err != nil {
@@ -168,7 +169,7 @@ func (kuka *kukaArm) handleMaxJointPositions(data []string) {
 func (kuka *kukaArm) handleGetJointPositions(data []string) {
 	kuka.logger.Infof(" - Robot Get Joint Positions: %v", data)
 	if len(data) != numJoints+numExternalJoints {
-		kuka.logger.Warnf("incorrect amount of data returned for joint position limits: %v", data)
+		kuka.logger.Warnf("incorrect amount of data returned for joint position limits: %v (should be 12)", data)
 		return
 	}
 
@@ -182,13 +183,16 @@ func (kuka *kukaArm) handleGetJointPositions(data []string) {
 		floatList[i] = c
 	}
 
+	// Update current state
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
 	kuka.currentState.joints = floatList
 }
 
 func (kuka *kukaArm) handleGetEndPositions(data []string) {
 	kuka.logger.Infof(" - Robot Get End Positions: %v", data)
 	if len(data) != 8+numExternalJoints {
-		kuka.logger.Warnf("incorrect amount of data returned for end position limits: %v", data)
+		kuka.logger.Warnf("incorrect amount of data returned for end position limits: %v (should be 14)", data)
 		return
 	}
 
@@ -202,6 +206,9 @@ func (kuka *kukaArm) handleGetEndPositions(data []string) {
 		floatList[i] = c
 	}
 
+	// Update current state
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
 	kuka.currentState.endEffectorPose = spatialmath.NewPose(
 		r3.Vector{X: floatList[0], Y: floatList[1], Z: floatList[2]},
 		&spatialmath.EulerAngles{
@@ -212,17 +219,29 @@ func (kuka *kukaArm) handleGetEndPositions(data []string) {
 	)
 }
 
+func (kuka *kukaArm) handleProgramState(data []string) {
+	kuka.logger.Infof(" - Robot Program State: %v", data)
+	if len(data) != 2 {
+		kuka.logger.Warnf("incorrect amount of data returned for robot programming state: %v (should be 2)", data)
+		return
+	}
+
+	// Update current state
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
+	kuka.currentState.programName = data[0]
+	kuka.currentState.programState = StringToProgramStatus(data[1])
+}
+
 // Set
 func (kuka *kukaArm) handleSetJointPositions(data []string) {
 	kuka.logger.Infof(" - Robot Set Joint Positions: %v", data)
 
-	switch data[1] {
-	case "success":
-		kuka.stateMutex.Lock()
-		defer kuka.stateMutex.Unlock()
-		kuka.currentState.isMoving = false
-	case "robotbusy":
-		kuka.logger.Warn("warning kuka resource is busy")
-	default:
-	}
+	// switch data[1] {
+	// case "success":
+	// 	kuka.setIsMovingSafe(false)
+	// case "robotbusy":
+	// 	kuka.logger.Warn("warning kuka resource is busy")
+	// default:
+	// }
 }
