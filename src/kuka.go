@@ -19,16 +19,18 @@ import (
 )
 
 const (
-	numJoints         int    = 6
-	numExternalJoints int    = 6
-	defaultTCPPort    int    = 54610
-	defaultIPAddress  string = "10.1.4.212"
-	defaultModel      string = "KR5_ACR"
+	numJoints         int = 6
+	numExternalJoints int = 6
+
+	defaultTCPPort   int    = 54610
+	defaultIPAddress string = "10.1.4.212"
+	defaultModel     string = "KR5_ACR"
 )
 
 var (
-	errUnimplemented = errors.New("unimplemented")
-	Model            = resource.NewModel("sol-eng", "arm", "kuka")
+	errUnimplemented      = errors.New("unimplemented")
+	Model                 = resource.NewModel("sol-eng", "arm", "kuka")
+	supportedKukaKRModels = []string{"KR5_ACR"}
 
 	motionTimeout time.Duration = 30 * time.Second
 )
@@ -60,15 +62,18 @@ type deviceInfo struct {
 	robotType       string
 	softwareVersion string
 	operatingMode   string
+
+	model       referenceframe.Model
+	jointLimits []jointLimit
 }
 
 type kukaArm struct {
 	resource.Named
 	logger logging.Logger
 
-	deviceInfo              deviceInfo
-	model                   referenceframe.Model
-	jointLimits             []jointLimit
+	deviceInfo      *deviceInfo
+	deviceInfoMutex *sync.Mutex
+
 	closed                  bool
 	safeMode                bool
 	activeBackgroundWorkers *sync.WaitGroup
@@ -101,11 +106,12 @@ func newKukaArm(ctx context.Context, deps resource.Dependencies, conf resource.C
 	kuka := kukaArm{
 		Named:      conf.ResourceName().AsNamed(),
 		logger:     logger,
-		deviceInfo: deviceInfo{},
+		deviceInfo: &deviceInfo{},
 
 		activeBackgroundWorkers: &sync.WaitGroup{},
 		tcpMutex:                &sync.Mutex{},
 		stateMutex:              &sync.Mutex{},
+		deviceInfoMutex:         &sync.Mutex{},
 	}
 
 	if err := kuka.Reconfigure(ctx, deps, conf); err != nil {
@@ -123,8 +129,7 @@ func (kuka *kukaArm) Reconfigure(ctx context.Context, deps resource.Dependencies
 	}
 
 	// Reset robot
-	kuka.currentState = &state{}
-	kuka.jointLimits = make([]jointLimit, numJoints)
+	kuka.resetCurrentStateAndDeviceInfo()
 
 	// Parse config
 	if err := kuka.parseConfig(newConf); err != nil {
@@ -165,6 +170,9 @@ func (kuka *kukaArm) Close(ctx context.Context) error {
 	kuka.closed = true
 
 	// Wait for mutexes
+	kuka.deviceInfoMutex.Lock()
+	defer kuka.deviceInfoMutex.Unlock()
+
 	kuka.stateMutex.Lock()
 	defer kuka.stateMutex.Unlock()
 
@@ -183,7 +191,9 @@ func (kuka *kukaArm) Close(ctx context.Context) error {
 
 // CurrentInputs returns the current joint positions in the form of Inputs.
 func (kuka *kukaArm) CurrentInputs(ctx context.Context) ([]referenceframe.Input, error) {
-	return kuka.model.InputFromProtobuf(&pb.JointPositions{Values: kuka.getCurrentStateSafe().joints}), nil
+	kuka.deviceInfoMutex.Lock()
+	defer kuka.deviceInfoMutex.Unlock()
+	return kuka.deviceInfo.model.InputFromProtobuf(&pb.JointPositions{Values: kuka.getCurrentStateSafe().joints}), nil
 
 }
 
@@ -191,7 +201,11 @@ func (kuka *kukaArm) CurrentInputs(ctx context.Context) ([]referenceframe.Input,
 func (kuka *kukaArm) GoToInputs(ctx context.Context, inputSteps ...[]referenceframe.Input) error {
 	for _, goal := range inputSteps {
 		if !kuka.getCurrentStateSafe().isMoving {
-			if err := kuka.MoveToJointPositions(ctx, kuka.model.ProtobufFromInput(goal), nil); err != nil {
+			kuka.deviceInfoMutex.Lock()
+			jointPositions := kuka.deviceInfo.model.ProtobufFromInput(goal)
+			kuka.deviceInfoMutex.Unlock()
+
+			if err := kuka.MoveToJointPositions(ctx, jointPositions, nil); err != nil {
 				return err
 			}
 		}
@@ -264,7 +278,6 @@ func (kuka *kukaArm) IsMoving(context.Context) (bool, error) {
 
 // Stop TBD
 func (kuka *kukaArm) Stop(ctx context.Context, extra map[string]interface{}) error {
-	fmt.Println("Stop")
 	return errUnimplemented
 }
 
@@ -290,16 +303,23 @@ func (kuka *kukaArm) DoCommand(ctx context.Context, cmd map[string]interface{}) 
 
 // ModelFrame returns a simple model frame for the Kuka arm.
 func (kuka *kukaArm) ModelFrame() referenceframe.Model {
-	return kuka.model
+	kuka.deviceInfoMutex.Lock()
+	defer kuka.deviceInfoMutex.Unlock()
+	return kuka.deviceInfo.model
 }
 
 // Geometries returns a list of geometries associated with the specified kuka arm.
 func (kuka *kukaArm) Geometries(ctx context.Context, extra map[string]interface{}) ([]spatialmath.Geometry, error) {
+	kuka.deviceInfoMutex.Lock()
+	defer kuka.deviceInfoMutex.Unlock()
+	model := kuka.deviceInfo.model
+
 	inputs, err := kuka.CurrentInputs(ctx)
 	if err != nil {
 		return nil, err
 	}
-	geometries, err := kuka.model.Geometries(inputs)
+
+	geometries, err := model.Geometries(inputs)
 	if err != nil {
 		return nil, err
 	}

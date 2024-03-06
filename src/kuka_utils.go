@@ -70,15 +70,43 @@ func (kuka *kukaArm) parseConfig(newConf *Config) error {
 		kuka.logger.Warnf("No model given, attempting to connect to default model: %v", defaultModel)
 		model = defaultModel
 	}
-	urdfModel, err := urdf.ParseModelXMLFile(resolveFile(fmt.Sprintf("src/models/%v_model.urdf", model)), kuka.Name().ShortName())
-	if err != nil {
-		return err
-	}
-	kuka.model = urdfModel
 
 	kuka.safeMode = newConf.SafeMode
 
+	kuka.deviceInfoMutex.Lock()
+	defer kuka.deviceInfoMutex.Unlock()
+	var foundModel bool
+	for _, supportedModel := range supportedKukaKRModels {
+		if model == supportedModel {
+			foundModel = true
+
+			urdfModel, err := urdf.ParseModelXMLFile(resolveFile(fmt.Sprintf("src/models/%v_model.urdf", model)), kuka.Name().ShortName())
+			if err != nil {
+				return err
+			}
+			kuka.logger.Infof("loading URDF model: %v", fmt.Sprintf("src/models/%v_model.urdf", model))
+			kuka.deviceInfo.model = urdfModel
+		}
+	}
+	if !foundModel {
+		return errors.Errorf("given model (%v) not in list of supported models (%v), no URDF files are available for desired model", model, supportedKukaKRModels)
+	}
+
 	return nil
+}
+
+// resetCurrentStateAndDeviceInfo resets the device's info and stored current state.
+func (kuka *kukaArm) resetCurrentStateAndDeviceInfo() {
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
+
+	kuka.deviceInfoMutex.Lock()
+	defer kuka.deviceInfoMutex.Unlock()
+
+	kuka.currentState = &state{}
+	kuka.deviceInfo = &deviceInfo{
+		jointLimits: make([]jointLimit, numJoints),
+	}
 }
 
 // getDeviceInfo will send a series of commands to the device to gather information from robot name and model to limits on joint movement
@@ -175,11 +203,15 @@ func (kuka *kukaArm) checkEKIProgramState() (ekiCommand.ProgramStatus, error) {
 
 // checkDesiredJointPositions checks the desried joint positions against the limits defined by the kuka device.
 func (kuka *kukaArm) checkDesiredJointPositions(desiredJointPositions []float64) error {
+	kuka.deviceInfoMutex.Lock()
+	deviceInfo := kuka.deviceInfo
+	kuka.deviceInfoMutex.Unlock()
+
 	for i := 0; i < numJoints; i++ {
 		tempJointPos := desiredJointPositions[i]
-		if tempJointPos <= kuka.jointLimits[i].min || tempJointPos >= kuka.jointLimits[i].max {
+		if tempJointPos <= deviceInfo.jointLimits[i].min || tempJointPos >= deviceInfo.jointLimits[i].max {
 			return errors.Errorf("invalid joint position specified,  %v is outside of joint[%v] limits [%v, %v]",
-				desiredJointPositions[i], i, kuka.jointLimits[i].min, kuka.jointLimits[i].max)
+				desiredJointPositions[i], i, deviceInfo.jointLimits[i].min, deviceInfo.jointLimits[i].max)
 		}
 	}
 	return nil

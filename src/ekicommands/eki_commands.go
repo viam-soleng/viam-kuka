@@ -10,7 +10,7 @@ import "github.com/pkg/errors"
 -   a,b,c: orientation in space of end effector
 -   status/turn: information regarding robot's position when returning end position as multiple robot poses can lead to
 				 same end position
-- program_state
+-   program_state: returns the current state of the program either: "Free", "Running", "Reset", "Ended" or "Stopped"
 */
 
 var (

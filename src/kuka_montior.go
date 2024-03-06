@@ -1,7 +1,6 @@
 package kuka
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -85,7 +84,7 @@ func (kuka *kukaArm) handleRobotResponses(command string, args []string) {
 	case ekiCommand.SetJointPosition:
 		kuka.handleSetJointPositions(args)
 	default:
-		fmt.Println("UNHANDLED RESPONSE: ", args)
+		kuka.logger.Infof("UNHANDLED RESPONSE: %v", args)
 	}
 }
 
@@ -95,6 +94,9 @@ func (kuka *kukaArm) handleRobotName(data []string) {
 		kuka.logger.Warnf("incorrect amount of data returned for robot name: %v  (should be 1)", data)
 		return
 	}
+
+	kuka.deviceInfoMutex.Lock()
+	defer kuka.deviceInfoMutex.Unlock()
 	kuka.deviceInfo.name = data[0]
 }
 
@@ -103,6 +105,9 @@ func (kuka *kukaArm) handleRobotSerialNumber(data []string) {
 		kuka.logger.Warnf("incorrect amount of data returned for robot serial number: %v  (should be 1)", data)
 		return
 	}
+
+	kuka.deviceInfoMutex.Lock()
+	defer kuka.deviceInfoMutex.Unlock()
 	kuka.deviceInfo.serialNum = data[0]
 }
 
@@ -111,6 +116,9 @@ func (kuka *kukaArm) handleRobotType(data []string) {
 		kuka.logger.Warnf("incorrect amount of data returned for robot type: %v  (should be 1)", data)
 		return
 	}
+
+	kuka.deviceInfoMutex.Lock()
+	defer kuka.deviceInfoMutex.Unlock()
 	kuka.deviceInfo.robotType = data[0]
 }
 
@@ -119,6 +127,9 @@ func (kuka *kukaArm) handleRobotSoftwareVersion(data []string) {
 		kuka.logger.Warnf("incorrect amount of data returned for robot software version mode: %v  (should be 1)", data)
 		return
 	}
+
+	kuka.deviceInfoMutex.Lock()
+	defer kuka.deviceInfoMutex.Unlock()
 	kuka.deviceInfo.softwareVersion = data[0]
 }
 
@@ -127,6 +138,9 @@ func (kuka *kukaArm) handleRobotOperatingMode(data []string) {
 		kuka.logger.Warnf("incorrect amount of data returned for robot operating mode: %v  (should be 1)", data)
 		return
 	}
+
+	kuka.deviceInfoMutex.Lock()
+	defer kuka.deviceInfoMutex.Unlock()
 	kuka.deviceInfo.operatingMode = data[0]
 }
 
@@ -138,14 +152,14 @@ func (kuka *kukaArm) handleMinJointPositions(data []string) {
 	}
 
 	// Parse data and update current state
-	kuka.stateMutex.Lock()
-	defer kuka.stateMutex.Unlock()
+	kuka.deviceInfoMutex.Lock()
+	defer kuka.deviceInfoMutex.Unlock()
 	for i := 0; i < numJoints; i++ {
 		val, err := strconv.ParseFloat(data[i], 64)
 		if err != nil {
 			kuka.logger.Warnf("issue parsing response to floats, failed to parse %v", data)
 		}
-		kuka.jointLimits[i].min = val
+		kuka.deviceInfo.jointLimits[i].min = val
 	}
 }
 
@@ -155,15 +169,15 @@ func (kuka *kukaArm) handleMaxJointPositions(data []string) {
 		return
 	}
 
-	// Parse data andpdate current state
-	kuka.stateMutex.Lock()
-	defer kuka.stateMutex.Unlock()
+	// Parse data and update current state
+	kuka.deviceInfoMutex.Lock()
+	defer kuka.deviceInfoMutex.Unlock()
 	for i := 0; i < numJoints; i++ {
 		val, err := strconv.ParseFloat(data[i], 64)
 		if err != nil {
 			kuka.logger.Warnf("issue parsing response to floats, failed to parse %v", data)
 		}
-		kuka.jointLimits[i].max = val
+		kuka.deviceInfo.jointLimits[i].max = val
 	}
 }
 

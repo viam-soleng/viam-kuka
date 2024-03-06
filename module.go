@@ -6,6 +6,7 @@ import (
 	"go.viam.com/rdk/components/arm"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/module"
+
 	"go.viam.com/utils"
 
 	kuka "github.com/viam-soleng/viam-kuka/src"
