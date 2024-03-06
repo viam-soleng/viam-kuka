@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	ekiCommand "github.com/viam-soleng/viam-kuka/src/ekicommands"
 
 	pb "go.viam.com/api/component/arm/v1"
 	"go.viam.com/rdk/components/arm"
@@ -49,7 +50,7 @@ type state struct {
 	joints          []float64
 	isMoving        bool
 
-	programState ProgramStatus
+	programState ekiCommand.ProgramStatus
 	programName  string
 }
 
@@ -122,7 +123,8 @@ func (kuka *kukaArm) Reconfigure(ctx context.Context, deps resource.Dependencies
 	}
 
 	// Reset robot
-	kuka.resetRobotData()
+	kuka.currentState = &state{}
+	kuka.jointLimits = make([]jointLimit, numJoints)
 
 	// Parse config
 	if err := kuka.parseConfig(newConf); err != nil {
@@ -144,12 +146,14 @@ func (kuka *kukaArm) Reconfigure(ctx context.Context, deps resource.Dependencies
 		return err
 	}
 
+	kuka.logger.Debugf("Device Info: %v", kuka.getDeviceInfo())
+
 	// Check program state
 	programState, err := kuka.checkEKIProgramState()
 	if err != nil {
 		return err
 	}
-	if programState != statusRunning {
+	if programState != ekiCommand.StatusRunning {
 		return errors.Errorf("associated program on your kuka device is %v, please get the program running before continuing", programState)
 	}
 
@@ -179,17 +183,14 @@ func (kuka *kukaArm) Close(ctx context.Context) error {
 
 // CurrentInputs returns the current joint positions in the form of Inputs.
 func (kuka *kukaArm) CurrentInputs(ctx context.Context) ([]referenceframe.Input, error) {
-	kuka.stateMutex.Lock()
-	defer kuka.stateMutex.Unlock()
-
-	return kuka.model.InputFromProtobuf(&pb.JointPositions{Values: kuka.currentState.joints}), nil
+	return kuka.model.InputFromProtobuf(&pb.JointPositions{Values: kuka.getCurrentStateSafe().joints}), nil
 
 }
 
 // GoToInputs moves through the given inputSteps using sequential calls to MoveJointPosition.
 func (kuka *kukaArm) GoToInputs(ctx context.Context, inputSteps ...[]referenceframe.Input) error {
 	for _, goal := range inputSteps {
-		if !kuka.getIsMovingSafe() {
+		if !kuka.getCurrentStateSafe().isMoving {
 			if err := kuka.MoveToJointPositions(ctx, kuka.model.ProtobufFromInput(goal), nil); err != nil {
 				return err
 			}
@@ -200,23 +201,17 @@ func (kuka *kukaArm) GoToInputs(ctx context.Context, inputSteps ...[]referencefr
 
 // EndPosition returns the current position of the arm.
 func (kuka *kukaArm) EndPosition(ctx context.Context, extra map[string]interface{}) (spatialmath.Pose, error) {
-	kuka.stateMutex.Lock()
-	defer kuka.stateMutex.Unlock()
-
-	return kuka.currentState.endEffectorPose, nil
+	return kuka.getCurrentStateSafe().endEffectorPose, nil
 }
 
 // JointPositions returns the current joint positions of the arm.
 func (kuka *kukaArm) JointPositions(ctx context.Context, extra map[string]interface{}) (*pb.JointPositions, error) {
-	kuka.stateMutex.Lock()
-	defer kuka.stateMutex.Unlock()
-
-	return &pb.JointPositions{Values: kuka.currentState.joints}, nil
+	return &pb.JointPositions{Values: kuka.getCurrentStateSafe().joints}, nil
 }
 
 // MoveToPosition moves the arm to the given absolute position. This will block until done or a new operation cancels this one.
+// This calls arm Move command that uses motion planning to make subsequent MoveToJointPositions to reach goal position.
 func (kuka *kukaArm) MoveToPosition(ctx context.Context, pose spatialmath.Pose, extra map[string]interface{}) error {
-	// Calling arm Move command that uses motion planning to make subsequent MoveToJointPositions to reach goal position.
 	return arm.Move(ctx, kuka.logger, kuka, pose)
 }
 
@@ -244,13 +239,15 @@ func (kuka *kukaArm) MoveToJointPositions(ctx context.Context, positionDegs *pb.
 	if err != nil {
 		return err
 	}
-	if programState != statusRunning {
+	if programState != ekiCommand.StatusRunning {
 		return errors.Errorf("associated program on your kuka device is %v, please get the program running before continuing", programState)
 	}
 
 	// Send command
-	kuka.setIsMovingSafe(true)
-	if err := kuka.sendCommand(setJointPositionEKICommand, fmt.Sprintf("%v,0,0,0,0,0,0", stringifyJoints)); err != nil {
+	kuka.stateMutex.Lock()
+	kuka.currentState.isMoving = true
+	kuka.stateMutex.Unlock()
+	if err := kuka.sendCommand(ekiCommand.SetJointPosition, fmt.Sprintf("%v,0,0,0,0,0,0", stringifyJoints)); err != nil {
 		return err
 	}
 
@@ -262,7 +259,7 @@ func (kuka *kukaArm) MoveToJointPositions(ctx context.Context, positionDegs *pb.
 
 // IsMoving returns if the arm is in motion.
 func (kuka *kukaArm) IsMoving(context.Context) (bool, error) {
-	return kuka.getIsMovingSafe(), nil
+	return kuka.getCurrentStateSafe().isMoving, nil
 }
 
 // Stop TBD
@@ -273,7 +270,6 @@ func (kuka *kukaArm) Stop(ctx context.Context, extra map[string]interface{}) err
 
 // DoCommand can be implemented to extend functionality but returns unimplemented currently.
 func (kuka *kukaArm) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
-
 	command, ok := cmd["cmd"].(string)
 	if !ok {
 		return nil, errors.Errorf("error, request value (%v) was not a string", cmd["cmd"])

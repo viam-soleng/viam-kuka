@@ -56,7 +56,7 @@ func (kuka *kukaArm) Write(command []byte) error {
 	kuka.tcpMutex.Lock()
 	defer kuka.tcpMutex.Unlock()
 
-	kuka.logger.Infof("Sending command: %v", string(command))
+	kuka.logger.Debugf("Sending command: %v", string(command))
 	if _, err := kuka.conn.Write(command); err != nil {
 		return err
 	}
@@ -64,6 +64,7 @@ func (kuka *kukaArm) Write(command []byte) error {
 	return nil
 }
 
+// Read from TCP dailer
 func (kuka *kukaArm) Read() ([]byte, error) {
 	kuka.tcpMutex.Lock()
 	defer kuka.tcpMutex.Unlock()
@@ -75,12 +76,11 @@ func (kuka *kukaArm) Read() ([]byte, error) {
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 			return nil, nil
 		}
-		fmt.Printf("RECV: %v | ERR: %v \n", recv, err)
 		return nil, err
 	}
 
 	response := recv[:n]
-	kuka.logger.Infof("Received response: %v", string(response))
+	kuka.logger.Debugf("Received response: %v", string(response))
 
 	return response, nil
 }

@@ -8,19 +8,16 @@ import (
 
 	"github.com/pkg/errors"
 	"go.viam.com/rdk/referenceframe/urdf"
+
+	ekiCommand "github.com/viam-soleng/viam-kuka/src/ekicommands"
 )
 
 var (
 	sendInfoCommandSleep time.Duration = 200 * time.Millisecond
-	//sendActionCommandSleep time.Duration = 1 * time.Millisecond
+	statusTimeout        time.Duration = 200 * time.Millisecond
 )
 
-// ResolveFile returns the path of the given file relative to the root
-// of the codebase. For example, if this file currently
-// lives in utils/file.go and ./foo/bar/baz is given, then the result
-// is foo/bar/baz. This is helpful when you don't want to relatively
-// refer to files when you're not sure where the caller actually
-// lives in relation to the target file.
+// ResolveFile returns the path of the given file relative to the root of the codebase.
 func resolveFile(fn string) string {
 	//nolint:dogsled
 	_, thisFilePath, _, _ := runtime.Caller(0)
@@ -31,6 +28,8 @@ func resolveFile(fn string) string {
 	return filepath.Join(thisDirPath, "..", fn)
 }
 
+// sendCommand will send the desired command (with any and all arguments), in the proper format,
+// to the kuka device via the TCP connection.
 func (kuka *kukaArm) sendCommand(EKICommand, args string) error {
 	var command string
 	if args != "" {
@@ -48,6 +47,7 @@ func (kuka *kukaArm) sendCommand(EKICommand, args string) error {
 	return nil
 }
 
+// parseConfig parses the given config, updating the kuka device info as necessary.
 func (kuka *kukaArm) parseConfig(newConf *Config) error {
 	if newConf.IPAddress != "" {
 		kuka.ip_address = newConf.IPAddress
@@ -81,37 +81,28 @@ func (kuka *kukaArm) parseConfig(newConf *Config) error {
 	return nil
 }
 
-func (kuka *kukaArm) resetRobotData() {
-	kuka.currentState = &state{}
-	kuka.jointLimits = make([]jointLimit, numJoints)
-}
-
+// getDeviceInfo will send a series of commands to the device to gather information from robot name and model to limits on joint movement
+// and starting positions.
 func (kuka *kukaArm) getDeviceInfo() error {
 
-	if err := kuka.sendCommand(getRobotNameEKICommand, ""); err != nil {
-		return err
+	// List of startup commands
+	startUpCommandList := []string{
+		ekiCommand.GetRobotName,
+		ekiCommand.GetRobotSerialNum,
+		ekiCommand.GetRobotType,
+		ekiCommand.GetRobotSoftwareVersion,
+		ekiCommand.GetRobotOperatingMode,
+		ekiCommand.GetJointNegLimit,
+		ekiCommand.GetJointPosLimit,
 	}
 
-	if err := kuka.sendCommand(getRobotSerialNumEKICommand, ""); err != nil {
-		return err
+	for _, command := range startUpCommandList {
+		if err := kuka.sendCommand(command, ""); err != nil {
+			return err
+		}
 	}
 
-	if err := kuka.sendCommand(getRobotTypeEKICommand, ""); err != nil {
-		return err
-	}
-
-	if err := kuka.sendCommand(getRobotSoftwareVersionEKICommand, ""); err != nil {
-		return err
-	}
-
-	if err := kuka.sendCommand(getJointNegLimitEKICommand, ""); err != nil {
-		return err
-	}
-
-	if err := kuka.sendCommand(getJointPosLimitEKICommand, ""); err != nil {
-		return err
-	}
-
+	// Update current state of kuka device
 	if err := kuka.updateState(); err != nil {
 		return err
 	}
@@ -119,39 +110,25 @@ func (kuka *kukaArm) getDeviceInfo() error {
 	return nil
 }
 
-func (kuka *kukaArm) checkDesiredJointPositions(desiredJointPositions []float64) error {
-	for i := 0; i < numJoints; i++ {
-		tempJointPos := desiredJointPositions[i]
-		kuka.logger.Warnf("JOINT CHECK: %v | min: %v | max: %v \n", tempJointPos, kuka.jointLimits[i].min, kuka.jointLimits[i].max)
-		if tempJointPos <= kuka.jointLimits[i].min || tempJointPos >= kuka.jointLimits[i].max {
-			return errors.Errorf("invalid joint position specified,  %v is outside of joint[%v] limits [%v, %v]",
-				desiredJointPositions[i], i, kuka.jointLimits[i].min, kuka.jointLimits[i].max)
-		}
-	}
-	return nil
-}
-
+// updateState pings the kuka device for its current joint positions and end position.
 func (kuka *kukaArm) updateState() error {
-	fmt.Println("getJointPositionEKICommand")
-	if err := kuka.sendCommand(getJointPositionEKICommand, ""); err != nil {
+	if err := kuka.sendCommand(ekiCommand.GetJointPosition, ""); err != nil {
 		return err
 	}
 
-	//time.Sleep(sendActionCommandSleep)
-
-	fmt.Println("getEndPositionEKICommand")
-	if err := kuka.sendCommand(getEndPositionEKICommand, ""); err != nil {
+	if err := kuka.sendCommand(ekiCommand.GetEndPosition, ""); err != nil {
 		return err
 	}
 
 	return nil
 }
 
+// updateStateLoop repeatedly pings the kuka device for current state information when the robot is in motion.
 func (kuka *kukaArm) updateStateLoop() {
 	startTime := time.Now()
 
 	for {
-		if kuka.closed || !kuka.getIsMovingSafe() || time.Now().After(startTime.Add(motionTimeout)) {
+		if kuka.closed || !kuka.getCurrentStateSafe().isMoving || time.Now().After(startTime.Add(motionTimeout)) {
 			break
 		}
 
@@ -161,41 +138,49 @@ func (kuka *kukaArm) updateStateLoop() {
 	}
 }
 
-func (kuka *kukaArm) getIsMovingSafe() bool {
+// getCurrentStateSafe accesses and returns the current state of the robot safety.
+func (kuka *kukaArm) getCurrentStateSafe() *state {
 	kuka.stateMutex.Lock()
 	defer kuka.stateMutex.Unlock()
-	return kuka.currentState.isMoving
+	return kuka.currentState
 }
 
-func (kuka *kukaArm) setIsMovingSafe(isMoving bool) {
-	kuka.stateMutex.Lock()
-	defer kuka.stateMutex.Unlock()
-	kuka.currentState.isMoving = isMoving
-}
-
-func (kuka *kukaArm) checkEKIProgramState() (ProgramStatus, error) {
+// checkEKIProgramState will ping and wait for the program state to be returned.
+func (kuka *kukaArm) checkEKIProgramState() (ekiCommand.ProgramStatus, error) {
 
 	kuka.stateMutex.Lock()
-	kuka.currentState.programState = statusUnknown
+	kuka.currentState.programState = ekiCommand.StatusUnknown
 	kuka.stateMutex.Unlock()
 
-	if err := kuka.sendCommand(getEKIProgramState, ""); err != nil {
-		return statusUnknown, err
+	if err := kuka.sendCommand(ekiCommand.GetEKIProgramState, ""); err != nil {
+		return ekiCommand.StatusUnknown, err
 	}
 
 	// Wait until response is returned
 	startTime := time.Now()
 
-	var programState ProgramStatus
+	var programState ekiCommand.ProgramStatus
 	for {
 		kuka.stateMutex.Lock()
 		programState = kuka.currentState.programState
 		kuka.stateMutex.Unlock()
 
-		if programState != statusUnknown || time.Now().After(startTime.Add(1*time.Second)) {
+		if programState != ekiCommand.StatusUnknown || time.Now().After(startTime.Add(statusTimeout)) {
 			break
 		}
 	}
 
 	return programState, nil
+}
+
+// checkDesiredJointPositions checks the desried joint positions against the limits defined by the kuka device.
+func (kuka *kukaArm) checkDesiredJointPositions(desiredJointPositions []float64) error {
+	for i := 0; i < numJoints; i++ {
+		tempJointPos := desiredJointPositions[i]
+		if tempJointPos <= kuka.jointLimits[i].min || tempJointPos >= kuka.jointLimits[i].max {
+			return errors.Errorf("invalid joint position specified,  %v is outside of joint[%v] limits [%v, %v]",
+				desiredJointPositions[i], i, kuka.jointLimits[i].min, kuka.jointLimits[i].max)
+		}
+	}
+	return nil
 }
