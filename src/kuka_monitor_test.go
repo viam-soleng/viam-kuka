@@ -10,6 +10,7 @@ import (
 	"github.com/golang/geo/r3"
 	eki_command "github.com/viam-soleng/viam-kuka/src/ekicommands"
 	"go.viam.com/rdk/logging"
+	"go.viam.com/rdk/referenceframe"
 	"go.viam.com/rdk/spatialmath"
 	"go.viam.com/rdk/utils"
 	"go.viam.com/test"
@@ -19,9 +20,9 @@ func TestHandleDeviceInfo(t *testing.T) {
 	logger := logging.NewTestLogger(t)
 
 	kuka := &kukaArm{
-		logger:          logger,
-		deviceInfoMutex: &sync.Mutex{},
-		deviceInfo:      &deviceInfo{},
+		logger:       logger,
+		stateMutex:   sync.Mutex{},
+		currentState: state{},
 	}
 
 	deviceInfoFunctions := []struct {
@@ -48,7 +49,7 @@ func TestHandleDeviceInfo(t *testing.T) {
 
 	for _, deviceInfoFunc := range deviceInfoFunctions {
 		for _, tt := range tests {
-			kuka.deviceInfo = &deviceInfo{}
+			kuka.deviceInfo = deviceInfo{}
 
 			t.Run(fmt.Sprintf("%v given %v", deviceInfoFunc.name, tt.description), func(t *testing.T) {
 				deviceInfoFunc.testFunc(tt.expectedData)
@@ -76,6 +77,16 @@ func TestHandleDeviceInfo(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestHandleCurrentState(t *testing.T) {
+	logger := logging.NewTestLogger(t)
+
+	kuka := &kukaArm{
+		logger:       logger,
+		stateMutex:   sync.Mutex{},
+		currentState: state{},
+	}
 
 	jointLimitsTests := []struct {
 		description string
@@ -88,7 +99,7 @@ func TestHandleDeviceInfo(t *testing.T) {
 	}
 
 	for _, tt := range jointLimitsTests {
-		kuka.deviceInfo = &deviceInfo{jointLimits: make([]jointLimit, numJoints)}
+		kuka.currentState = state{jointLimits: make([]referenceframe.Limit, numJoints)}
 
 		t.Run(fmt.Sprintf("joint limits given %v", tt.description), func(t *testing.T) {
 			kuka.handleMinJointPositions(tt.data)
@@ -96,24 +107,14 @@ func TestHandleDeviceInfo(t *testing.T) {
 			if tt.success {
 				expectedMinResult := helperStringListToFloats(tt.data[0:6])
 				expectedMaxResult := helperStringListToFloats(tt.data[0:6])
-				for i, jointLimit := range kuka.deviceInfo.jointLimits {
-					test.That(t, jointLimit.min, test.ShouldResemble, expectedMinResult[i])
-					test.That(t, jointLimit.max, test.ShouldResemble, expectedMaxResult[i])
+				for i, jointLimit := range kuka.currentState.jointLimits {
+					test.That(t, jointLimit.Min, test.ShouldResemble, expectedMinResult[i])
+					test.That(t, jointLimit.Max, test.ShouldResemble, expectedMaxResult[i])
 				}
 			} else {
-				test.That(t, kuka.deviceInfo.jointLimits, test.ShouldResemble, make([]jointLimit, numJoints))
+				test.That(t, kuka.currentState.jointLimits, test.ShouldResemble, make([]referenceframe.Limit, numJoints))
 			}
 		})
-	}
-}
-
-func TestHandleCurrentState(t *testing.T) {
-	logger := logging.NewTestLogger(t)
-
-	kuka := &kukaArm{
-		logger:       logger,
-		stateMutex:   &sync.Mutex{},
-		currentState: &state{},
 	}
 
 	jointPositionTests := []struct {
@@ -127,7 +128,7 @@ func TestHandleCurrentState(t *testing.T) {
 	}
 
 	for _, tt := range jointPositionTests {
-		kuka.currentState = &state{}
+		kuka.currentState = state{}
 
 		t.Run(fmt.Sprintf("joint position given %v", tt.description), func(t *testing.T) {
 			kuka.handleGetJointPositions(tt.data)
@@ -151,7 +152,7 @@ func TestHandleCurrentState(t *testing.T) {
 	}
 
 	for _, tt := range endPositionTests {
-		kuka.currentState = &state{}
+		kuka.currentState = state{}
 
 		t.Run(fmt.Sprintf("end position given %v", tt.description), func(t *testing.T) {
 			kuka.handleGetEndPositions(tt.data)
@@ -181,7 +182,7 @@ func TestHandleCurrentState(t *testing.T) {
 	}
 
 	for _, tt := range programStateTests {
-		kuka.currentState = &state{}
+		kuka.currentState = state{}
 
 		t.Run(fmt.Sprintf("end position given %v", tt.description), func(t *testing.T) {
 			kuka.handleProgramState(tt.data)
@@ -202,8 +203,8 @@ func TestHandleSuccess(t *testing.T) {
 
 	kuka := &kukaArm{
 		logger:       logger,
-		stateMutex:   &sync.Mutex{},
-		currentState: &state{isMoving: true},
+		stateMutex:   sync.Mutex{},
+		currentState: state{isMoving: true},
 	}
 
 	isMoving, err := kuka.IsMoving(ctx)

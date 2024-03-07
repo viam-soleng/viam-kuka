@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"go.viam.com/rdk/referenceframe"
 	"go.viam.com/rdk/referenceframe/urdf"
 
 	ekiCommand "github.com/viam-soleng/viam-kuka/src/ekicommands"
@@ -49,18 +50,21 @@ func (kuka *kukaArm) sendCommand(EKICommand, args string) error {
 
 // parseConfig parses the given config, updating the kuka device info as necessary.
 func (kuka *kukaArm) parseConfig(newConf *Config) error {
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
+
 	if newConf.IPAddress != "" {
-		kuka.ip_address = newConf.IPAddress
+		kuka.tcpConn.ipAddress = newConf.IPAddress
 	} else {
 		kuka.logger.Warnf("No ip address given, attempting to connect via default ip %v", defaultIPAddress)
-		kuka.ip_address = defaultIPAddress
+		kuka.tcpConn.ipAddress = defaultIPAddress
 	}
 
 	if newConf.Port != 0 {
-		kuka.tcp_port = newConf.Port
+		kuka.tcpConn.port = newConf.Port
 	} else {
 		kuka.logger.Warnf("No port given, attempting to connect on default port %v", defaultTCPPort)
-		kuka.tcp_port = defaultTCPPort
+		kuka.tcpConn.port = defaultTCPPort
 	}
 
 	var model string
@@ -71,10 +75,6 @@ func (kuka *kukaArm) parseConfig(newConf *Config) error {
 		model = defaultModel
 	}
 
-	kuka.safeMode = newConf.SafeMode
-
-	kuka.deviceInfoMutex.Lock()
-	defer kuka.deviceInfoMutex.Unlock()
 	var foundModel bool
 	for _, supportedModel := range supportedKukaKRModels {
 		if model == supportedModel {
@@ -84,13 +84,16 @@ func (kuka *kukaArm) parseConfig(newConf *Config) error {
 			if err != nil {
 				return err
 			}
+
 			kuka.logger.Infof("loading URDF model: %v", fmt.Sprintf("src/models/%v_model.urdf", model))
-			kuka.deviceInfo.model = urdfModel
+			kuka.model = urdfModel
 		}
 	}
 	if !foundModel {
 		return errors.Errorf("given model (%v) not in list of supported models (%v), no URDF files are available for desired model", model, supportedKukaKRModels)
 	}
+
+	kuka.safeMode = newConf.SafeMode
 
 	return nil
 }
@@ -100,13 +103,11 @@ func (kuka *kukaArm) resetCurrentStateAndDeviceInfo() {
 	kuka.stateMutex.Lock()
 	defer kuka.stateMutex.Unlock()
 
-	kuka.deviceInfoMutex.Lock()
-	defer kuka.deviceInfoMutex.Unlock()
-
-	kuka.currentState = &state{}
-	kuka.deviceInfo = &deviceInfo{
-		jointLimits: make([]jointLimit, numJoints),
+	kuka.currentState = state{
+		jointLimits:  make([]referenceframe.Limit, numJoints),
+		programState: ekiCommand.StatusUnknown,
 	}
+	kuka.deviceInfo = deviceInfo{}
 }
 
 // getDeviceInfo will send a series of commands to the device to gather information from robot name and model to limits on joint movement
@@ -167,7 +168,7 @@ func (kuka *kukaArm) updateStateLoop() {
 }
 
 // getCurrentStateSafe accesses and returns the current state of the robot safety.
-func (kuka *kukaArm) getCurrentStateSafe() *state {
+func (kuka *kukaArm) getCurrentStateSafe() state {
 	kuka.stateMutex.Lock()
 	defer kuka.stateMutex.Unlock()
 	return kuka.currentState
@@ -201,17 +202,20 @@ func (kuka *kukaArm) checkEKIProgramState() (ekiCommand.ProgramStatus, error) {
 	return programState, nil
 }
 
-// checkDesiredJointPositions checks the desried joint positions against the limits defined by the kuka device.
+// checkDesiredJointPositions checks the desired joint positions against the limits defined by the kuka device.
 func (kuka *kukaArm) checkDesiredJointPositions(desiredJointPositions []float64) error {
-	kuka.deviceInfoMutex.Lock()
-	deviceInfo := kuka.deviceInfo
-	kuka.deviceInfoMutex.Unlock()
+	kuka.stateMutex.Lock()
+	currentState := kuka.currentState
+	kuka.stateMutex.Unlock()
+
+	// limits := kuka.deviceInfo.model.DoF()
+	// kuka.deviceInfo.model.Transform()
 
 	for i := 0; i < numJoints; i++ {
 		tempJointPos := desiredJointPositions[i]
-		if tempJointPos <= deviceInfo.jointLimits[i].min || tempJointPos >= deviceInfo.jointLimits[i].max {
+		if tempJointPos <= currentState.jointLimits[i].Min || tempJointPos >= currentState.jointLimits[i].Max {
 			return errors.Errorf("invalid joint position specified,  %v is outside of joint[%v] limits [%v, %v]",
-				desiredJointPositions[i], i, deviceInfo.jointLimits[i].min, deviceInfo.jointLimits[i].max)
+				desiredJointPositions[i], i, currentState.jointLimits[i].Min, currentState.jointLimits[i].Max)
 		}
 	}
 	return nil

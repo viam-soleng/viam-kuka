@@ -42,15 +42,12 @@ type Config struct {
 	SafeMode  bool   `json:"safe_mode,omitempty"`
 }
 
-type jointLimit struct {
-	min float64
-	max float64
-}
-
 type state struct {
 	endEffectorPose spatialmath.Pose
 	joints          []float64
-	isMoving        bool
+	jointLimits     []referenceframe.Limit
+
+	isMoving bool
 
 	programState ekiCommand.ProgramStatus
 	programName  string
@@ -62,29 +59,29 @@ type deviceInfo struct {
 	robotType       string
 	softwareVersion string
 	operatingMode   string
+}
 
-	model       referenceframe.Model
-	jointLimits []jointLimit
+type tcpConn struct {
+	ipAddress string
+	port      int
+	conn      net.Conn
+	mu        sync.Mutex
 }
 
 type kukaArm struct {
 	resource.Named
 	logger logging.Logger
 
-	deviceInfo      *deviceInfo
-	deviceInfoMutex *sync.Mutex
+	deviceInfo   deviceInfo
+	currentState state
+	stateMutex   sync.Mutex
+	model        referenceframe.Model
 
 	closed                  bool
 	safeMode                bool
-	activeBackgroundWorkers *sync.WaitGroup
+	activeBackgroundWorkers sync.WaitGroup
 
-	currentState *state
-	stateMutex   *sync.Mutex
-
-	ip_address string
-	tcp_port   int
-	conn       net.Conn
-	tcpMutex   *sync.Mutex
+	tcpConn tcpConn
 }
 
 func init() {
@@ -104,14 +101,15 @@ func (cfg *Config) Validate(path string) ([]string, error) {
 func newKukaArm(ctx context.Context, deps resource.Dependencies, conf resource.Config, logger logging.Logger) (arm.Arm, error) {
 
 	kuka := kukaArm{
-		Named:      conf.ResourceName().AsNamed(),
-		logger:     logger,
-		deviceInfo: &deviceInfo{},
+		Named:  conf.ResourceName().AsNamed(),
+		logger: logger,
+		tcpConn: tcpConn{
+			mu: sync.Mutex{},
+		},
+		deviceInfo: deviceInfo{},
 
-		activeBackgroundWorkers: &sync.WaitGroup{},
-		tcpMutex:                &sync.Mutex{},
-		stateMutex:              &sync.Mutex{},
-		deviceInfoMutex:         &sync.Mutex{},
+		activeBackgroundWorkers: sync.WaitGroup{},
+		stateMutex:              sync.Mutex{},
 	}
 
 	if err := kuka.Reconfigure(ctx, deps, conf); err != nil {
@@ -151,7 +149,7 @@ func (kuka *kukaArm) Reconfigure(ctx context.Context, deps resource.Dependencies
 		return err
 	}
 
-	kuka.logger.Debugf("Device Info: %v", kuka.getDeviceInfo())
+	kuka.logger.Debugf("Device Info: %v", kuka.deviceInfo)
 
 	// Check program state
 	programState, err := kuka.checkEKIProgramState()
@@ -170,14 +168,11 @@ func (kuka *kukaArm) Close(ctx context.Context) error {
 	kuka.closed = true
 
 	// Wait for mutexes
-	kuka.deviceInfoMutex.Lock()
-	defer kuka.deviceInfoMutex.Unlock()
-
 	kuka.stateMutex.Lock()
 	defer kuka.stateMutex.Unlock()
 
-	kuka.tcpMutex.Lock()
-	defer kuka.tcpMutex.Unlock()
+	kuka.tcpConn.mu.Lock()
+	defer kuka.tcpConn.mu.Unlock()
 
 	// Wait for background process to end
 	kuka.activeBackgroundWorkers.Wait()
@@ -191,9 +186,9 @@ func (kuka *kukaArm) Close(ctx context.Context) error {
 
 // CurrentInputs returns the current joint positions in the form of Inputs.
 func (kuka *kukaArm) CurrentInputs(ctx context.Context) ([]referenceframe.Input, error) {
-	kuka.deviceInfoMutex.Lock()
-	defer kuka.deviceInfoMutex.Unlock()
-	return kuka.deviceInfo.model.InputFromProtobuf(&pb.JointPositions{Values: kuka.getCurrentStateSafe().joints}), nil
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
+	return kuka.model.InputFromProtobuf(&pb.JointPositions{Values: kuka.getCurrentStateSafe().joints}), nil
 
 }
 
@@ -201,9 +196,10 @@ func (kuka *kukaArm) CurrentInputs(ctx context.Context) ([]referenceframe.Input,
 func (kuka *kukaArm) GoToInputs(ctx context.Context, inputSteps ...[]referenceframe.Input) error {
 	for _, goal := range inputSteps {
 		if !kuka.getCurrentStateSafe().isMoving {
-			kuka.deviceInfoMutex.Lock()
-			jointPositions := kuka.deviceInfo.model.ProtobufFromInput(goal)
-			kuka.deviceInfoMutex.Unlock()
+
+			kuka.stateMutex.Lock()
+			jointPositions := kuka.model.ProtobufFromInput(goal)
+			kuka.stateMutex.Unlock()
 
 			if err := kuka.MoveToJointPositions(ctx, jointPositions, nil); err != nil {
 				return err
@@ -249,12 +245,14 @@ func (kuka *kukaArm) MoveToJointPositions(ctx context.Context, positionDegs *pb.
 	)
 
 	// Check EKI program state before issuing move command
-	programState, err := kuka.checkEKIProgramState()
-	if err != nil {
-		return err
-	}
-	if programState != ekiCommand.StatusRunning {
-		return errors.Errorf("associated program on your kuka device is %v, please get the program running before continuing", programState)
+	if kuka.safeMode {
+		programState, err := kuka.checkEKIProgramState()
+		if err != nil {
+			return err
+		}
+		if programState != ekiCommand.StatusRunning {
+			return errors.Errorf("associated program on your kuka device is %v, please get the program running before continuing", programState)
+		}
 	}
 
 	// Send command
@@ -303,16 +301,16 @@ func (kuka *kukaArm) DoCommand(ctx context.Context, cmd map[string]interface{}) 
 
 // ModelFrame returns a simple model frame for the Kuka arm.
 func (kuka *kukaArm) ModelFrame() referenceframe.Model {
-	kuka.deviceInfoMutex.Lock()
-	defer kuka.deviceInfoMutex.Unlock()
-	return kuka.deviceInfo.model
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
+	return kuka.model
 }
 
 // Geometries returns a list of geometries associated with the specified kuka arm.
 func (kuka *kukaArm) Geometries(ctx context.Context, extra map[string]interface{}) ([]spatialmath.Geometry, error) {
-	kuka.deviceInfoMutex.Lock()
-	defer kuka.deviceInfoMutex.Unlock()
-	model := kuka.deviceInfo.model
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
+	model := kuka.model
 
 	inputs, err := kuka.CurrentInputs(ctx)
 	if err != nil {

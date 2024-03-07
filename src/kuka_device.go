@@ -19,7 +19,7 @@ var (
 func (kuka *kukaArm) Connect(ctx context.Context) error {
 
 	// Close any prior connections
-	if kuka.conn != nil {
+	if kuka.tcpConn.conn != nil {
 		if err := kuka.Disconnect(); err != nil {
 			return err
 		}
@@ -30,21 +30,21 @@ func (kuka *kukaArm) Connect(ctx context.Context) error {
 	defer ctxCancel()
 
 	var d net.Dialer
-	address := fmt.Sprintf("%v:%v", kuka.ip_address, kuka.tcp_port)
+	address := fmt.Sprintf("%v:%v", kuka.tcpConn.ipAddress, kuka.tcpConn.port)
 	conn, err := d.DialContext(ctx, "tcp", address)
 	if err != nil {
 		return err
 	}
 
 	kuka.logger.Infof("Connected to device at %v", address)
-	kuka.conn = conn
+	kuka.tcpConn.conn = conn
 
 	return nil
 }
 
 // Disconnect TCP dialer
 func (kuka *kukaArm) Disconnect() error {
-	if err := kuka.conn.Close(); err != nil {
+	if err := kuka.tcpConn.conn.Close(); err != nil {
 		return err
 	}
 
@@ -53,11 +53,10 @@ func (kuka *kukaArm) Disconnect() error {
 
 // Write to TCP dialer
 func (kuka *kukaArm) Write(command []byte) error {
-	kuka.tcpMutex.Lock()
-	defer kuka.tcpMutex.Unlock()
-
+	kuka.tcpConn.mu.Lock()
+	defer kuka.tcpConn.mu.Unlock()
 	kuka.logger.Debugf("Sending command: %v", string(command))
-	if _, err := kuka.conn.Write(command); err != nil {
+	if _, err := kuka.tcpConn.conn.Write(command); err != nil {
 		return err
 	}
 
@@ -66,12 +65,12 @@ func (kuka *kukaArm) Write(command []byte) error {
 
 // Read from TCP dialer
 func (kuka *kukaArm) Read() ([]byte, error) {
-	kuka.tcpMutex.Lock()
-	defer kuka.tcpMutex.Unlock()
+	kuka.tcpConn.mu.Lock()
+	defer kuka.tcpConn.mu.Unlock()
 
-	kuka.conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	kuka.tcpConn.conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 	recv := make([]byte, defaultReadBufSize)
-	n, err := kuka.conn.Read(recv)
+	n, err := kuka.tcpConn.conn.Read(recv)
 	if err != nil {
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 			return nil, nil

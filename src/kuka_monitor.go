@@ -6,12 +6,15 @@ import (
 
 	"github.com/golang/geo/r3"
 	ekiCommand "github.com/viam-soleng/viam-kuka/src/ekicommands"
+	"go.viam.com/rdk/referenceframe"
 	"go.viam.com/rdk/spatialmath"
 	"go.viam.com/rdk/utils"
 )
 
 // startResponseMonitor starts up a background process to monitor responses from the TCP connection.
 func (kuka *kukaArm) startResponseMonitor() error {
+
+	//gutils.PanicCapturingGo(func()
 	kuka.activeBackgroundWorkers.Add(1)
 	go func() {
 		defer kuka.activeBackgroundWorkers.Done()
@@ -95,8 +98,8 @@ func (kuka *kukaArm) handleRobotName(data []string) {
 		return
 	}
 
-	kuka.deviceInfoMutex.Lock()
-	defer kuka.deviceInfoMutex.Unlock()
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
 	kuka.deviceInfo.name = data[0]
 }
 
@@ -106,8 +109,8 @@ func (kuka *kukaArm) handleRobotSerialNumber(data []string) {
 		return
 	}
 
-	kuka.deviceInfoMutex.Lock()
-	defer kuka.deviceInfoMutex.Unlock()
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
 	kuka.deviceInfo.serialNum = data[0]
 }
 
@@ -117,8 +120,8 @@ func (kuka *kukaArm) handleRobotType(data []string) {
 		return
 	}
 
-	kuka.deviceInfoMutex.Lock()
-	defer kuka.deviceInfoMutex.Unlock()
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
 	kuka.deviceInfo.robotType = data[0]
 }
 
@@ -128,8 +131,8 @@ func (kuka *kukaArm) handleRobotSoftwareVersion(data []string) {
 		return
 	}
 
-	kuka.deviceInfoMutex.Lock()
-	defer kuka.deviceInfoMutex.Unlock()
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
 	kuka.deviceInfo.softwareVersion = data[0]
 }
 
@@ -139,8 +142,8 @@ func (kuka *kukaArm) handleRobotOperatingMode(data []string) {
 		return
 	}
 
-	kuka.deviceInfoMutex.Lock()
-	defer kuka.deviceInfoMutex.Unlock()
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
 	kuka.deviceInfo.operatingMode = data[0]
 }
 
@@ -152,20 +155,20 @@ func (kuka *kukaArm) handleMinJointPositions(data []string) {
 	}
 
 	// Parse data and update current state
-	jointLimits := make([]jointLimit, numJoints)
+	jointLimits := make([]referenceframe.Limit, numJoints)
 	for i := 0; i < numJoints; i++ {
 		val, err := strconv.ParseFloat(data[i], 64)
 		if err != nil {
 			kuka.logger.Warnf("issue parsing response to floats, failed to parse %v", data)
 			return
 		}
-		jointLimits[i].min = val
+		jointLimits[i].Min = val
 	}
 
-	kuka.deviceInfoMutex.Lock()
-	defer kuka.deviceInfoMutex.Unlock()
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
 	for i := range jointLimits {
-		kuka.deviceInfo.jointLimits[i].min = jointLimits[i].min
+		kuka.currentState.jointLimits[i].Min = jointLimits[i].Min
 	}
 }
 
@@ -176,20 +179,20 @@ func (kuka *kukaArm) handleMaxJointPositions(data []string) {
 	}
 
 	// Parse data and update current state
-	jointLimits := make([]jointLimit, numJoints)
+	jointLimits := make([]referenceframe.Limit, numJoints)
 	for i := 0; i < numJoints; i++ {
 		val, err := strconv.ParseFloat(data[i], 64)
 		if err != nil {
 			kuka.logger.Warnf("issue parsing response to floats, failed to parse %v", data)
 			return
 		}
-		jointLimits[i].max = val
+		jointLimits[i].Max = val
 	}
 
-	kuka.deviceInfoMutex.Lock()
-	defer kuka.deviceInfoMutex.Unlock()
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
 	for i := range jointLimits {
-		kuka.deviceInfo.jointLimits[i].max = jointLimits[i].max
+		kuka.currentState.jointLimits[i].Max = jointLimits[i].Max
 	}
 }
 
