@@ -189,7 +189,6 @@ func (kuka *kukaArm) CurrentInputs(ctx context.Context) ([]referenceframe.Input,
 	kuka.stateMutex.Lock()
 	defer kuka.stateMutex.Unlock()
 	return kuka.model.InputFromProtobuf(&pb.JointPositions{Values: kuka.getCurrentStateSafe().joints}), nil
-
 }
 
 // GoToInputs moves through the given inputSteps using sequential calls to MoveJointPosition.
@@ -233,6 +232,10 @@ func (kuka *kukaArm) MoveToJointPositions(ctx context.Context, positionDegs *pb.
 	// Check validity of action based on joint limit
 	if err := kuka.checkDesiredJointPositions(desiredJointPositions); err != nil {
 		return err
+	}
+
+	if isMoving, _ := kuka.IsMoving(ctx); isMoving {
+		return errors.New("robot is still moving, please try again after previous movement is complete")
 	}
 
 	stringifyJoints := fmt.Sprintf("%v,%v,%v,%v,%v,%v",
