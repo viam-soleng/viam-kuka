@@ -64,7 +64,7 @@ func (kuka *kukaArm) Write(command []byte) error {
 	return nil
 }
 
-// Read from TCP dailer
+// Read from TCP dialer
 func (kuka *kukaArm) Read() ([]byte, error) {
 	kuka.tcpMutex.Lock()
 	defer kuka.tcpMutex.Unlock()

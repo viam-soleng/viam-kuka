@@ -152,14 +152,20 @@ func (kuka *kukaArm) handleMinJointPositions(data []string) {
 	}
 
 	// Parse data and update current state
-	kuka.deviceInfoMutex.Lock()
-	defer kuka.deviceInfoMutex.Unlock()
+	jointLimits := make([]jointLimit, numJoints)
 	for i := 0; i < numJoints; i++ {
 		val, err := strconv.ParseFloat(data[i], 64)
 		if err != nil {
 			kuka.logger.Warnf("issue parsing response to floats, failed to parse %v", data)
+			return
 		}
-		kuka.deviceInfo.jointLimits[i].min = val
+		jointLimits[i].min = val
+	}
+
+	kuka.deviceInfoMutex.Lock()
+	defer kuka.deviceInfoMutex.Unlock()
+	for i := range jointLimits {
+		kuka.deviceInfo.jointLimits[i].min = jointLimits[i].min
 	}
 }
 
@@ -170,14 +176,20 @@ func (kuka *kukaArm) handleMaxJointPositions(data []string) {
 	}
 
 	// Parse data and update current state
-	kuka.deviceInfoMutex.Lock()
-	defer kuka.deviceInfoMutex.Unlock()
+	jointLimits := make([]jointLimit, numJoints)
 	for i := 0; i < numJoints; i++ {
 		val, err := strconv.ParseFloat(data[i], 64)
 		if err != nil {
 			kuka.logger.Warnf("issue parsing response to floats, failed to parse %v", data)
+			return
 		}
-		kuka.deviceInfo.jointLimits[i].max = val
+		jointLimits[i].max = val
+	}
+
+	kuka.deviceInfoMutex.Lock()
+	defer kuka.deviceInfoMutex.Unlock()
+	for i := range jointLimits {
+		kuka.deviceInfo.jointLimits[i].max = jointLimits[i].max
 	}
 }
 
@@ -193,6 +205,7 @@ func (kuka *kukaArm) handleGetJointPositions(data []string) {
 		c, err := strconv.ParseFloat(data[i], 64)
 		if err != nil {
 			kuka.logger.Warnf("issue parsing response to floats, failed to parse %v", data)
+			return
 		}
 		jointList[i] = c
 	}
@@ -212,9 +225,10 @@ func (kuka *kukaArm) handleGetEndPositions(data []string) {
 	// Parse values to floats
 	endPositionList := make([]float64, 8)
 	for i := 0; i < numJoints; i++ {
-		c, err := strconv.ParseFloat(data[i+1], 64)
+		c, err := strconv.ParseFloat(data[i], 64)
 		if err != nil {
 			kuka.logger.Warnf("issue parsing response to floats, failed to parse %v", data)
+			return
 		}
 		endPositionList[i] = c
 	}
