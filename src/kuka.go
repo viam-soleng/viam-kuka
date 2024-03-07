@@ -76,15 +76,15 @@ type kukaArm struct {
 
 	closed                  bool
 	safeMode                bool
-	activeBackgroundWorkers *sync.WaitGroup
+	activeBackgroundWorkers sync.WaitGroup
 
 	currentState *state
-	stateMutex   *sync.Mutex
+	stateMutex   sync.Mutex
 
 	ip_address string
 	tcp_port   int
 	conn       net.Conn
-	tcpMutex   *sync.Mutex
+	tcpMutex   sync.Mutex
 }
 
 func init() {
@@ -108,10 +108,7 @@ func newKukaArm(ctx context.Context, deps resource.Dependencies, conf resource.C
 		logger:     logger,
 		deviceInfo: &deviceInfo{},
 
-		activeBackgroundWorkers: &sync.WaitGroup{},
-		tcpMutex:                &sync.Mutex{},
-		stateMutex:              &sync.Mutex{},
-		deviceInfoMutex:         &sync.Mutex{},
+		activeBackgroundWorkers: sync.WaitGroup{}, // you don't actually need to initialize the mutexes if they're not pointers, leaving this here in case we're not adding 1 later.
 	}
 
 	if err := kuka.Reconfigure(ctx, deps, conf); err != nil {

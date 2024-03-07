@@ -19,7 +19,7 @@ var (
 func (kuka *kukaArm) Connect(ctx context.Context) error {
 
 	// Close any prior connections
-	if kuka.conn != nil {
+	if kuka.conn != nil { // we should check this out of the state structure if we can, I'll look
 		if err := kuka.Disconnect(); err != nil {
 			return err
 		}
@@ -29,9 +29,11 @@ func (kuka *kukaArm) Connect(ctx context.Context) error {
 	ctx, ctxCancel := context.WithTimeout(ctx, connectionTimeout)
 	defer ctxCancel()
 
+	// I noticed in their large pdf that they have a streaming server avaialble, it seemed to indicate that you could 
+	// connect to it directly, without running the program on the interface machine, I will re-check.
 	var d net.Dialer
 	address := fmt.Sprintf("%v:%v", kuka.ip_address, kuka.tcp_port)
-	conn, err := d.DialContext(ctx, "tcp", address)
+	conn, err := d.DialContext(ctx, "tcp", address) // might need a keepalive.
 	if err != nil {
 		return err
 	}
