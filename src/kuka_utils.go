@@ -208,6 +208,9 @@ func (kuka *kukaArm) checkDesiredJointPositions(desiredJointPositions []float64)
 	currentState := kuka.currentState
 	kuka.stateMutex.Unlock()
 
+	// Note: Limits can also be imported via the URDF attached them to the referenceframe.Model. The transform
+	// function can then be used as shown below. This is current not the implementation due to differences
+	// between the limits in the URDF and those returned by the kuka program.
 	// limits := kuka.deviceInfo.model.DoF()
 	// kuka.deviceInfo.model.Transform()
 

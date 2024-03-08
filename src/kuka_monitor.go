@@ -9,18 +9,18 @@ import (
 	"go.viam.com/rdk/referenceframe"
 	"go.viam.com/rdk/spatialmath"
 	"go.viam.com/rdk/utils"
+	gutils "go.viam.com/utils"
 )
 
 // startResponseMonitor starts up a background process to monitor responses from the TCP connection.
 func (kuka *kukaArm) startResponseMonitor() error {
 
-	//gutils.PanicCapturingGo(func()
 	kuka.activeBackgroundWorkers.Add(1)
-	go func() {
+	gutils.PanicCapturingGo(func() {
 		defer kuka.activeBackgroundWorkers.Done()
 
 		kuka.responseMonitor()
-	}()
+	})
 	return nil
 }
 

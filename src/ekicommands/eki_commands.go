@@ -3,11 +3,14 @@ package eki_command
 import "github.com/pkg/errors"
 
 /* EKI Request and Response Details:
--   a1-a6: the robot joint values
--   e1-e6: the external axes joint values
+-   a1-a6: degrees, the robot joint values
+-   e1-e6: degrees, the external axes joint values
 -   mode: T1, T2, Auto or Extern
--   x,y,z: point in space of the end effector
--   a,b,c: orientation in space of end effector
+	- T1: Safe standstill monitoring is activated as soon as all axes are at a standstill or after 680 ms at the latest.
+	- T2, AUT (KSS), AUT EXT (KSS), EXT (VSS): After the configured braking time (default: 1.5 s), safe standstill monitoring
+	  is activated for all axes.
+-   x,y,z: meters, point in space of the end position in space
+-   a,b,c: degrees, orientation in space of end position in space
 -   status/turn: information regarding robot's position when returning end position as multiple robot poses can lead to
 				 same end position
 -   program_state: returns the current state of the program either: "Free", "Running", "Reset", "Ended" or "Stopped"
