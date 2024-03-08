@@ -16,6 +16,8 @@ import (
 	"go.viam.com/rdk/referenceframe"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/spatialmath"
+
+	gutils "go.viam.com/utils"
 )
 
 const (
@@ -82,6 +84,8 @@ type kukaArm struct {
 	activeBackgroundWorkers sync.WaitGroup
 
 	tcpConn tcpConn
+
+	responseCh chan bool
 }
 
 func init() {
@@ -110,6 +114,7 @@ func newKukaArm(ctx context.Context, deps resource.Dependencies, conf resource.C
 
 		activeBackgroundWorkers: sync.WaitGroup{},
 		stateMutex:              sync.Mutex{},
+		responseCh:              make(chan bool, 1),
 	}
 
 	if err := kuka.Reconfigure(ctx, deps, conf); err != nil {
@@ -152,7 +157,7 @@ func (kuka *kukaArm) Reconfigure(ctx context.Context, deps resource.Dependencies
 	kuka.logger.Debugf("Device Info: %v", kuka.deviceInfo)
 
 	// Check program state
-	programState, err := kuka.checkEKIProgramState()
+	programState, err := kuka.checkEKIProgramState(ctx)
 	if err != nil {
 		return err
 	}
@@ -249,7 +254,7 @@ func (kuka *kukaArm) MoveToJointPositions(ctx context.Context, positionDegs *pb.
 
 	// Check EKI program state before issuing move command
 	if kuka.safeMode {
-		programState, err := kuka.checkEKIProgramState()
+		programState, err := kuka.checkEKIProgramState(ctx)
 		if err != nil {
 			return err
 		}
@@ -267,7 +272,14 @@ func (kuka *kukaArm) MoveToJointPositions(ctx context.Context, positionDegs *pb.
 	}
 
 	// Loop until operation ends
-	kuka.updateStateLoop()
+	cancelCtx, cancelFunc := context.WithCancel(ctx)
+	defer cancelFunc()
+	kuka.activeBackgroundWorkers.Add(1)
+	gutils.PanicCapturingGo(func() {
+		kuka.updateStateLoop(cancelCtx)
+	})
+
+	<-kuka.responseCh
 
 	return nil
 }

@@ -86,6 +86,7 @@ func TestHandleCurrentState(t *testing.T) {
 		logger:       logger,
 		stateMutex:   sync.Mutex{},
 		currentState: state{},
+		responseCh:   make(chan bool, 1),
 	}
 
 	jointLimitsTests := []struct {
@@ -121,10 +122,11 @@ func TestHandleCurrentState(t *testing.T) {
 		description string
 		data        []string
 		success     bool
+		checkCh     bool
 	}{
-		{description: "incorrect amount of data", data: []string{"0", "0", "0"}, success: false},
-		{description: "correct amount of data bad format", data: []string{"1", "2", "3", "hi", "0", "0", "0", "0", "0", "0", "0", "0"}, success: true},
-		{description: "correct amount of data", data: []string{"1", "2", "3", "0", "0", "0", "0", "0", "0", "0", "0", "0"}, success: true},
+		{description: "incorrect amount of data", data: []string{"0", "0", "0"}, success: false, checkCh: false},
+		{description: "correct amount of data bad format", data: []string{"1", "2", "3", "hi", "0", "0", "0", "0", "0", "0", "0", "0"}, success: false, checkCh: true},
+		{description: "correct amount of data", data: []string{"1", "2", "3", "0", "0", "0", "0", "0", "0", "0", "0", "0"}, success: true, checkCh: true},
 	}
 
 	for _, tt := range jointPositionTests {
@@ -133,6 +135,8 @@ func TestHandleCurrentState(t *testing.T) {
 		t.Run(fmt.Sprintf("joint position given %v", tt.description), func(t *testing.T) {
 			kuka.handleGetJointPositions(tt.data)
 			if tt.success {
+				resp := <-kuka.responseCh
+				test.That(t, resp, test.ShouldBeTrue)
 				expectedResult := helperStringListToFloats(tt.data[0:6])
 				test.That(t, kuka.currentState.joints, test.ShouldResemble, expectedResult)
 			} else {

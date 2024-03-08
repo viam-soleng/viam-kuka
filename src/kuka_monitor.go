@@ -9,6 +9,7 @@ import (
 	"go.viam.com/rdk/referenceframe"
 	"go.viam.com/rdk/spatialmath"
 	"go.viam.com/rdk/utils"
+
 	gutils "go.viam.com/utils"
 )
 
@@ -196,9 +197,10 @@ func (kuka *kukaArm) handleMaxJointPositions(data []string) {
 	}
 }
 
+// handleGetJointPositions is blocking
 func (kuka *kukaArm) handleGetJointPositions(data []string) {
 	if len(data) != numJoints+numExternalJoints {
-		kuka.logger.Warnf("incorrect amount of data returned for joint position limits: %v (should be 12)", data)
+		kuka.logger.Warnf("incorrect amount of data returned for joint position: %v (should be 12)", data)
 		return
 	}
 
@@ -217,6 +219,8 @@ func (kuka *kukaArm) handleGetJointPositions(data []string) {
 	kuka.stateMutex.Lock()
 	defer kuka.stateMutex.Unlock()
 	kuka.currentState.joints = jointList
+
+	kuka.responseCh <- true
 }
 
 func (kuka *kukaArm) handleGetEndPositions(data []string) {
@@ -249,6 +253,7 @@ func (kuka *kukaArm) handleGetEndPositions(data []string) {
 	)
 }
 
+// handleProgramState is blocking
 func (kuka *kukaArm) handleProgramState(data []string) {
 	if len(data) != 2 {
 		kuka.logger.Warnf("incorrect amount of data returned for robot programming state: %v (should be 2)", data)
@@ -260,6 +265,8 @@ func (kuka *kukaArm) handleProgramState(data []string) {
 	defer kuka.stateMutex.Unlock()
 	kuka.currentState.programName = data[0]
 	kuka.currentState.programState = ekiCommand.StringToProgramStatus(data[1])
+
+	kuka.responseCh <- true
 }
 
 // Set

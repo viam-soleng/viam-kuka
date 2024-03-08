@@ -1,6 +1,7 @@
 package kuka
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"runtime"
@@ -10,12 +11,13 @@ import (
 	"go.viam.com/rdk/referenceframe"
 	"go.viam.com/rdk/referenceframe/urdf"
 
+	"go.viam.com/utils"
+
 	ekiCommand "github.com/viam-soleng/viam-kuka/src/ekicommands"
 )
 
 var (
 	sendInfoCommandSleep time.Duration = 200 * time.Millisecond
-	statusTimeout        time.Duration = 200 * time.Millisecond
 )
 
 // ResolveFile returns the path of the given file relative to the root of the codebase.
@@ -44,7 +46,6 @@ func (kuka *kukaArm) sendCommand(EKICommand, args string) error {
 	}
 
 	time.Sleep(sendInfoCommandSleep)
-
 	return nil
 }
 
@@ -153,11 +154,14 @@ func (kuka *kukaArm) updateState() error {
 }
 
 // updateStateLoop repeatedly pings the kuka device for current state information when the robot is in motion.
-func (kuka *kukaArm) updateStateLoop() {
+func (kuka *kukaArm) updateStateLoop(cancelCtx context.Context) {
 	startTime := time.Now()
 
 	for {
-		if kuka.closed || !kuka.getCurrentStateSafe().isMoving || time.Now().After(startTime.Add(motionTimeout)) {
+		if err := cancelCtx.Err(); err != nil {
+			break
+		}
+		if kuka.closed || time.Now().After(startTime.Add(motionTimeout)) {
 			break
 		}
 
@@ -175,31 +179,19 @@ func (kuka *kukaArm) getCurrentStateSafe() state {
 }
 
 // checkEKIProgramState will ping and wait for the program state to be returned.
-func (kuka *kukaArm) checkEKIProgramState() (ekiCommand.ProgramStatus, error) {
-
-	kuka.stateMutex.Lock()
-	kuka.currentState.programState = ekiCommand.StatusUnknown
-	kuka.stateMutex.Unlock()
-
+func (kuka *kukaArm) checkEKIProgramState(ctx context.Context) (ekiCommand.ProgramStatus, error) {
 	if err := kuka.sendCommand(ekiCommand.GetEKIProgramState, ""); err != nil {
 		return ekiCommand.StatusUnknown, err
 	}
 
 	// Wait until response is returned
-	startTime := time.Now()
-
-	var programState ekiCommand.ProgramStatus
-	for {
-		kuka.stateMutex.Lock()
-		programState = kuka.currentState.programState
-		kuka.stateMutex.Unlock()
-
-		if programState != ekiCommand.StatusUnknown || time.Now().After(startTime.Add(statusTimeout)) {
-			break
-		}
+	if !utils.SelectContextOrWaitChan(ctx, kuka.responseCh) {
+		return ekiCommand.StatusUnknown, errors.New("closed")
 	}
 
-	return programState, nil
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
+	return kuka.currentState.programState, nil
 }
 
 // checkDesiredJointPositions checks the desired joint positions against the limits defined by the kuka device.

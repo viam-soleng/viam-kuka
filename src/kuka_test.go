@@ -78,6 +78,7 @@ func TestSetterEndpoints(t *testing.T) {
 				{Min: 0, Max: 100},
 			},
 		},
+		responseCh: make(chan bool, 1),
 	}
 
 	conn := inject.NewTCPConn()
@@ -101,11 +102,46 @@ func TestSetterEndpoints(t *testing.T) {
 
 	t.Run("successful", func(t *testing.T) {
 		expectedJoints := []float64{1, 1, 2, 3, 4, 5}
+		var trackInt int
 
 		conn.WriteFunc = func(b []byte) (n int, err error) {
-			kuka.currentState.joints = expectedJoints
-			kuka.currentState.programState = eki_command.StatusRunning
-			kuka.currentState.isMoving = false
+			// Update required info when 5 commands come through
+			if trackInt == 4 {
+				kuka.currentState.joints = expectedJoints
+				kuka.currentState.programState = eki_command.StatusRunning
+				kuka.currentState.isMoving = false
+				kuka.responseCh <- true
+			}
+			trackInt++
+			return 0, nil
+		}
+
+		kuka.tcpConn.conn = conn
+
+		err := kuka.MoveToJointPositions(ctx, &v1.JointPositions{Values: expectedJoints}, nil)
+		test.That(t, err, test.ShouldBeNil)
+	})
+
+	t.Run("successful safemode", func(t *testing.T) {
+		kuka.safeMode = true
+		expectedJoints := []float64{1, 1, 2, 3, 4, 5}
+		var trackInt int
+
+		conn.WriteFunc = func(b []byte) (n int, err error) {
+			// Update required info when the ProgramState command comes through
+			if trackInt == 0 {
+				kuka.currentState.programState = eki_command.StatusRunning
+				trackInt++
+				kuka.responseCh <- true
+				return 0, nil
+			}
+			// Update required info after 3 more commands have come through
+			if trackInt == 4 {
+				kuka.currentState.joints = expectedJoints
+				kuka.currentState.isMoving = false
+				kuka.responseCh <- true
+			}
+			trackInt++
 			return 0, nil
 		}
 

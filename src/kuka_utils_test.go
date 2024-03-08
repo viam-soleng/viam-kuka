@@ -1,6 +1,7 @@
 package kuka
 
 import (
+	"context"
 	"sync"
 	"testing"
 
@@ -110,12 +111,14 @@ func TestResetInformation(t *testing.T) {
 
 func TestCommunication(t *testing.T) {
 	logger := logging.NewTestLogger(t)
+	ctx := context.Background()
 
 	kuka := &kukaArm{
 		logger: logger,
 		tcpConn: tcpConn{
 			mu: sync.Mutex{},
 		},
+		responseCh: make(chan bool, 1),
 	}
 
 	conn := inject.NewTCPConn()
@@ -141,11 +144,12 @@ func TestCommunication(t *testing.T) {
 	t.Run("Check EKI Program State", func(t *testing.T) {
 		conn.WriteFunc = func(b []byte) (n int, err error) {
 			kuka.currentState.programState = eki_command.StatusRunning
+			kuka.responseCh <- true
 			return 0, nil
 		}
 		kuka.tcpConn.conn = conn
 
-		status, err := kuka.checkEKIProgramState()
+		status, err := kuka.checkEKIProgramState(ctx)
 		test.That(t, err, test.ShouldBeNil)
 		test.That(t, status, test.ShouldResemble, eki_command.StatusRunning)
 	})
