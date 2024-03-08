@@ -13,6 +13,6 @@
   "build": {
     "build": "make module",
     "path": "module.tar.gz",
-    "arch" : ["linux/arm64", "linux/amd64"]
+    "arch" : ["linux/arm64"]
   }
 }

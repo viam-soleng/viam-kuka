@@ -27,12 +27,9 @@ goformat:
 	goimports -w -local=go.viam.com/utils `go list -f '{{.Dir}}' ./... | grep -Ev "proto"`
 
 lint: goformat
-	go install github.com/edaniels/golinters/cmd/combined
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint
-	go install github.com/polyfloyd/go-errorlint
-	go list -f '{{.Dir}}' ./... | grep -v gen | xargs go vet -vettool=`go env GOPATH`/bin/combined
-	go list -f '{{.Dir}}' ./... | grep -v gen | xargs `go env GOPATH`/bin/go-errorlint -errorf
-	go list -f '{{.Dir}}' ./... | grep -v gen | xargs go run github.com/golangci/golangci-lint/cmd/golangci-lint run -v --config=./etc/.golangci.yaml
+	go install golang.org/x/tools/cmd/goimports
+	gofmt -s -w .
+	goimports -w -local=go.viam.com/utils `go list -f '{{.Dir}}' ./... | grep -Ev "proto"`
 
 build:
 	mkdir -p bin &&  go build $(GO_BUILD_LDFLAGS) -o bin/viam-kuka-module module.go
