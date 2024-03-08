@@ -1,0 +1,9 @@
+viam-kuka:
+    default: true
+    image_amd64: ghcr.io/viamrobotics/rdk-devenv:amd64
+    image_arm64: ghcr.io/viamrobotics/rdk-devenv:arm64
+    minimum_date: 2023-10-26T20:00:00.0Z
+    update_interval: 168h0m0s
+    user: testbot
+    group: testbot
+    persistent: true

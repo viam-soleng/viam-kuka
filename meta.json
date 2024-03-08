@@ -1,0 +1,18 @@
+{
+  "module_id": "viam-soleng:viam-kuka",
+  "visibility": "private",
+  "url": "https://github.com/viam-soleng/viam-kuka",
+  "description": "Go module for operating a Kuka Arm",
+  "models": [
+    {
+      "api": "rdk:component:arm",
+      "model": "viam-soleng:arm:viam-kuka"
+    }
+  ],
+  "entrypoint": "viam-kuka-module.AppImage",
+  "build": {
+    "build": "make module",
+    "path": "module.tar.gz",
+    "arch" : ["linux/arm64", "linux/amd64"]
+  }
+}

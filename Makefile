@@ -40,8 +40,16 @@ build:
 install:
 	sudo cp bin/viam-kuka-module /usr/local/bin/viam-kuka-module
 
-test: swig
+test: 
 	go test -v -coverprofile=coverage.txt -covermode=atomic ./... -race
 
 clean: 
 	rm -rf bin
+	rm -f viam-kuka-module.AppImage
+
+module: clean setup build appimage
+	cp etc/packaging/appimages/deploy/*.AppImage viam-kuka-module.AppImage
+	chmod +x viam-kuka-module.AppImage
+	tar czf module.tar.gz viam-kuka-module.AppImage
+
+include *.make
