@@ -3,7 +3,6 @@ version: 1
 script:
  - rm -rf $TARGET_APPDIR | true
  - mkdir -p "$TARGET_APPDIR/usr/bin"
- - mkdir -p "$TARGET_APPDIR/usr/lib"
  - cp ../../../bin/viam-kuka-module "$TARGET_APPDIR/usr/bin/viam-kuka-module"
  - mkdir -p "$TARGET_APPDIR/usr/share/icons/viam/256x256/apps/"
  - cp ./viam-server.png "$TARGET_APPDIR/usr/share/icons/viam/256x256/apps/viam-server.png"
@@ -12,11 +11,11 @@ script:
 AppDir:
   path: ./AppDir
   app_info:
-    id: com.jeremyrhyde.viam-kuka
-    name: viam-kuka
+    id: com.viam-soleng.viam-kuka-module
+    name: viam-kuka-module
     icon: viam-server
     version: ${BUILD_CHANNEL}
-    exec: usr/bin/viam-kuka
+    exec: usr/bin/viam-kuka-module
     exec_args: $@
   apt:
     arch:
@@ -32,9 +31,5 @@ AppDir:
     include: []
     exclude:
     - usr/include
-    - usr/share/man
-    - usr/share/doc
-    - usr/share/info
-    - usr/share/lintian
 AppImage:
   arch: aarch64
