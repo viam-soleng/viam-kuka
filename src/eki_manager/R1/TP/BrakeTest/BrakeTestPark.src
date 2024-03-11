@@ -1,0 +1,35 @@
+&ACCESS RV
+&REL 1
+&COMMENT parkposition
+&PARAM EDITMASK = *
+&PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
+&PARAM DISKPATH = KRC:\R1\TP\BrakeTest
+DEF BrakeTestPark( )
+;FOLD INI
+  ;FOLD BASISTECH INI
+    GLOBAL INTERRUPT DECL 3 WHEN $STOPMESS==TRUE DO IR_STOPM ( )
+    INTERRUPT ON 3 
+  ;ENDFOLD (BASISTECH INI)
+  ;FOLD USER INI
+    ;Make your modifications here
+  ;ENDFOLD (USER INI)
+;ENDFOLD (INI)
+;Teach here the motion to the parking position. The parking position is needed when the robot has failed the brake test.
+;FOLD {h}
+WHILE ParkPositionInNotValid()
+  MsgDialog(SUCCESS,"ParkPositionIsNotValid",brakeTestMdbName[],,,,,,,"Ok")
+  HALT
+ENDWHILE
+;ENDFOLD
+;FOLD SPTP ParkPosition Vel=10 % DEFAULT Tool[1] Base[0] ;%{PE}
+;FOLD Parameters ;%{h}
+;Params IlfProvider=kukaroboter.basistech.inlineforms.movement.spline; Kuka.IsGlobalPoint=False; Kuka.PointName=ParkPosition; Kuka.BlendingEnabled=False; Kuka.MoveDataPtpName=DEFAULT; Kuka.VelocityPtp=10; Kuka.VelocityFieldEnabled=True; Kuka.ColDetectFieldEnabled=True; Kuka.CurrentCDSetIndex=0; Kuka.MovementParameterFieldEnabled=True; IlfCommand=SPTP
+;ENDFOLD
+SPTP XParkPosition WITH $VEL_AXIS[1] = SVEL_JOINT(10.0), $TOOL = STOOL2(FParkPosition), $BASE = SBASE(FParkPosition.BASE_NO), $IPO_MODE = SIPO_MODE(FParkPosition.IPO_FRAME), $LOAD = SLOAD(FParkPosition.TOOL_NO), $ACC_AXIS[1] = SACC_JOINT(PDEFAULT), $APO = SAPO_PTP(PDEFAULT), $GEAR_JERK[1] = SGEAR_JERK(PDEFAULT), $COLLMON_TOL_PRO[1] = USE_CM_PRO_VALUES(0)
+;ENDFOLD
+END
+;FOLD {h}
+Global DEFFCT BOOL ParkPositionInNotValid()
+RETURN ((XParkPosition.A1 == 999) AND (XParkPosition.A2 == 999) AND (XParkPosition.A3 == 999) AND (XParkPosition.A4 == 999) AND (XParkPosition.A5 == 999) AND (XParkPosition.A6 == 999) AND (XParkPosition.E1 == 999) AND (XParkPosition.E2 == 999) AND (XParkPosition.E3 == 999) AND (XParkPosition.E4 == 999) AND (XParkPosition.E5 == 999) AND (XParkPosition.E6 == 999))
+ENDFCT
+;ENDFOLD

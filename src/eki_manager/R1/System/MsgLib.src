@@ -1,0 +1,678 @@
+&ACCESS R
+&COMMENT library of msg-calls
+&COMMENT Message library
+DEF  MsgLib ( )
+;**************************************************
+;Creation Date: 7.12.2007
+;Change:  23.06.2012 additional properties possible 
+;         for logging and advance stop control
+;**************************************************
+;FOLD Interfaces and message examples within this fold
+;----------Global subroutines and functions: -------
+
+;MsgNotify(sText[]:IN, sModul[]:IN, nNumPar:IN, sTextPar[]:IN, nMsgNr:IN,MsgOpt:IN)
+;MsgNotifyTextPar(sText[]:IN, sModul[]:IN, nNumPar:IN, sTextPar[]:IN, sTextPar2[]:IN, nMsgNr:IN,MsgOpt:IN)
+;MsgQuit(sText[]:IN, sModul[]:IN, nNumPar:IN, sTextPar[]:IN, nMsgNr:IN,MsgOpt:IN)
+;MsgState(nHandle:OUT, sText[]:IN, sModul[]:IN, nNumPar:IN, sTextPar[]:IN, nMsgNr:IN,MsgOpt:IN)
+;MsgLoop(sText[]:IN,sModul[]:IN)
+;MsgDialog(nAnswer:OUT,sText[]:IN,sModul[]:IN,sTextPar[]:IN,sDialogSK1[]:IN,sDialogSK2[]:IN,sDialogSK3[]:IN,sDialogSK4[]:IN,sDialogSK5[]:IN,sDialogSK6[]:IN,sDialogSK7[]:IN,NoBrakes:IN, nMsgNr:IN,MsgOpt:IN)
+
+;----------Explainations for parameters: -----------
+
+;CHAR sText[]  message text or message DB-key (80 chars)
+;CHAR sModul[] (option) modulname or key (24 char)
+;INT nNumPar   (option)numeric value inserted in sText[] at the position %1
+;CHAR sTextPar[] (option)text or message DB-key inserted in sText[] at the position %1 (26 char)
+;MsgOpt          (option) Structure KrlMsgOpt_T  BOOL VL_Stop,Clear_P_Reset,Log_To_DB
+;                (option) VL_Stop=TRUE    => Creates an advance stop | FALSE avoids this behavior
+;                (option) Clear_P_Reset=TRUE (Default) deletes Messages at program reset / cancelled
+;                (option) Log_To_DB=TRUE => entry into logbook => enfluence to system performance
+
+;----------Examples: -------------------------------
+
+;MsgNotifyTextPar("Error", "CrossMeld", 0, "Error message 1", "Error message 2", 511)
+;MsgNotify("this is a notify message")
+;MsgQuit("this is a quit message", "myMod")
+;MsgQuit("this is a quit message", "myMod",,,12345)
+;INT myInt=123
+;MsgQuit("this is the %1 quit message", "Module", myInt)
+;MsgNotify("this is a %1 notify message", "Tech", , "asd")
+;MsgLoop("this is the loop message")
+;MsgLoop(" "); cancels loop message
+;MsgDialog(DialogAnswer, "DBKEY" OR "dialog message", "Module", "TextPar for %1 in DBKey", "DialogKey1", "DialogKey2", "DialogKey3",,,,,,12345) 
+;MsgDialog(DialogAnswer, "StartPTP", "CrossMeld", "Achse 3", "YES", "NO", "Cancel") 
+;MsgNotifyTextPar("DBKEY" OR "notify message", "Module", 0 OR >0, "TextPar for %1", "TextPar for %2")
+;nNumPar = 0: TextPar will be send as %1 %2  nNumPar > 0: nNumPar will be send as %1
+;ENDFOLD
+END
+;***************************
+;Execution of notify message
+;***************************
+GLOBAL DEF MsgNotify(sText[]:IN, sModul[]:IN, nNumPar:IN, sTextPar[]:IN, nMsgNr:IN,MsgOpt:IN)
+DECL CHAR sText[], sModul[], sTextPar[]   
+DECL KrlMsg_T Msg
+DECL KrlMsgParType_T MsgParType
+DECL KrlMsgPar_T MsgPar[3]
+DECL KrlMsgOpt_T MsgOpt ;Bool-elements: VL_Stop,Clear_P_Reset,Log_To_DB
+DECL KrlMsgOpt_T DummyMsgOpt
+DECL State_T State
+DECL INT count, len, offset, nNumPar, nHandle, nMsgNr
+
+  ;Default Values: MsgOpt={ VL_Stop TRUE, Clear_P_Reset TRUE, Log_To_DB False }
+  ON_ERROR_PROCEED 
+  DummyMsgOpt=MsgOpt
+  
+  IF ($ERR.Number<>0) THEN
+    MsgOpt.VL_Stop=TRUE ;DEFAULT setting TRUE
+    MsgOpt.Clear_P_Reset=TRUE
+    MsgOpt.Log_To_DB=FALSE
+    ERR_CLEAR($ERR)
+  ELSE
+    ERR_RAISE($ERR)
+  ENDIF
+  
+  ;Creates default values in case of none availability
+  MsgOpt=CheckOfMsgOpt(MsgOpt)
+  
+  Msg.Nr=1
+  ERR_CLEAR($ERR)
+  ON_ERROR_PROCEED
+  Msg.Nr=nMsgNr
+  len=STRLEN(sText[])
+  IF  len>0 THEN
+    IF len>80 THEN
+      len=80
+    ENDIF
+    FOR count=1 TO len
+      Msg.Msg_txt[count]=sText[count]
+    ENDFOR
+  ELSE
+    Msg.Msg_txt[]="parameter sText[] is missing"
+  ENDIF
+  len=STRLEN(sModul[])
+  IF  len>0 THEN
+    IF len>24 THEN
+      len=24
+    ENDIF
+    FOR count=1 TO len
+      Msg.Modul[count]=sModul[count]
+    ENDFOR
+  ELSE
+    Msg.Modul[]="Appl" 
+  ENDIF
+  ERR_CLEAR($ERR)
+  ON_ERROR_PROCEED
+  offset=nNumPar
+  IF  $ERR.Number==0 THEN
+    offset=0
+    MsgPar[1].Par_Txt[]=" "
+    SWRITE(MsgPar[1].Par_Txt[], State, Offset, "%d", nNumPar)
+    MsgPar[1].Par_type=#Value
+  ELSE
+    ERR_CLEAR($ERR)
+    ON_ERROR_PROCEED
+    len=STRLEN(sTextPar[])
+    IF len>0 THEN
+      IF len>26 THEN
+        len=26
+      ENDIF
+      FOR count=1 TO len
+        MsgPar[1].Par_Txt[count]=sTextPar[count]
+      ENDFOR
+      MsgPar[1].Par_type=#Value 
+    ENDIF
+  ENDIF
+
+  nHandle=Set_KrlMsg (#NOTIFY, Msg, MsgPar[], MsgOpt)
+  
+END ;(MsgNotify)
+;*****************************
+;Execution of the quit message
+;*****************************
+GLOBAL DEF MsgQuit(sText[]:IN, sModul[]:IN, nNumPar:IN, sTextPar[]:IN, nMsgNr:IN,MsgOpt:IN)
+DECL CHAR sText[], sModul[], sTextPar[]  
+DECL KrlMsg_T Msg
+DECL KrlMsgParType_T MsgParType
+DECL KrlMsgPar_T MsgPar[3]
+DECL KrlMsgOpt_T MsgOpt
+DECL KrlMsgOpt_T DummyMsgOpt
+DECL State_T State
+DECL INT count, len, offset, nNumPar, nHandle, nMsgNr
+
+  ON_ERROR_PROCEED 
+  DummyMsgOpt=MsgOpt
+  
+  IF ($ERR.Number<>0) THEN
+    MsgOpt.VL_Stop=TRUE ;DEFAULT setting TRUE
+    MsgOpt.Clear_P_Reset=TRUE
+    MsgOpt.Log_To_DB=FALSE
+    ERR_CLEAR($ERR)
+  ELSE
+    ERR_RAISE($ERR)
+  ENDIF
+  
+  ;Creates default values in case of none availability
+  MsgOpt=CheckOfMsgOpt(MsgOpt)
+
+  Msg.Nr=1
+  ERR_CLEAR($ERR)
+  ON_ERROR_PROCEED
+  Msg.Nr=nMsgNr
+  len=STRLEN(sText[])
+  IF  len>0 THEN
+    IF len>80 THEN
+      len=80
+    ENDIF
+    FOR count=1 TO len
+      Msg.Msg_txt[count]=sText[count]
+    ENDFOR
+  ELSE
+    Msg.Msg_txt[]="parameter sText[] is missing"
+  ENDIF
+  len=STRLEN(sModul[])
+  IF  len>0 THEN
+    IF len>24 THEN
+      len=24
+    ENDIF
+    FOR count=1 TO len
+      Msg.Modul[count]=sModul[count]
+    ENDFOR
+  ELSE
+    Msg.Modul[]="Appl" 
+  ENDIF
+  ERR_CLEAR($ERR)
+  ON_ERROR_PROCEED
+  offset=nNumPar
+  IF  $ERR.Number==0 THEN
+    offset=0
+    MsgPar[1].Par_Txt[]=" "
+    SWRITE(MsgPar[1].Par_Txt[], State, offset, "%d", nNumPar)
+    MsgPar[1].Par_type=#Value
+  ELSE
+    ERR_CLEAR($ERR)
+    len=STRLEN(sTextPar[])
+    IF len>0 THEN
+      IF len>26 THEN
+        len=26
+      ENDIF
+      FOR count=1 TO len
+        MsgPar[1].Par_Txt[count]=sTextPar[count]
+      ENDFOR
+      MsgPar[1].Par_type=#Value 
+    ENDIF
+  ENDIF
+
+  nHandle=Set_KrlMsg (#QUIT, Msg, MsgPar[], MsgOpt)
+  
+  WHILE ( Exists_KrlMsg(nHandle) ) 
+    WAIT sec 0.1
+  ENDWHILE
+
+END ;(MsgQuit)
+;******************************
+;Execution of the state message
+;******************************
+GLOBAL DEF MsgState(nHandle:OUT, sText[]:IN, sModul[]:IN, nNumPar:IN, sTextPar[]:IN, nMsgNr:IN,MsgOpt:IN)
+DECL CHAR sText[], sModul[], sTextPar[]  
+DECL KrlMsg_T Msg
+DECL KrlMsgParType_T MsgParType
+DECL KrlMsgPar_T MsgPar[3]
+DECL KrlMsgOpt_T MsgOpt
+DECL KrlMsgOpt_T DummyMsgOpt
+DECL State_T State
+DECL INT count, len, offset, nNumPar, nHandle, nMsgNr
+
+  ON_ERROR_PROCEED 
+  DummyMsgOpt=MsgOpt
+  
+  IF ($ERR.Number<>0) THEN
+    MsgOpt.VL_Stop=TRUE ;DEFAULT setting TRUE
+    MsgOpt.Clear_P_Reset=TRUE
+    MsgOpt.Log_To_DB=FALSE
+    ERR_CLEAR($ERR)
+  ELSE
+    ERR_RAISE($ERR)
+  ENDIF
+  
+  ;Creates default values in case of none availability
+  MsgOpt=CheckOfMsgOpt(MsgOpt)
+
+  Msg.Nr=1
+  ERR_CLEAR($ERR)
+  ON_ERROR_PROCEED
+  Msg.Nr=nMsgNr
+  len=STRLEN(sText[])
+  IF  len>0 THEN
+    IF len>80 THEN
+      len=80
+    ENDIF
+    FOR count=1 TO len
+      Msg.Msg_txt[count]=sText[count]
+    ENDFOR
+  ELSE
+    Msg.Msg_txt[]="parameter sText[] is missing"
+  ENDIF
+  len=STRLEN(sModul[])
+  IF  len>0 THEN
+    IF len>24 THEN
+      len=24
+    ENDIF
+    FOR count=1 TO len
+      Msg.Modul[count]=sModul[count]
+    ENDFOR
+  ELSE
+    Msg.Modul[]="Appl" 
+  ENDIF
+  ERR_CLEAR($ERR)
+  ON_ERROR_PROCEED
+  offset=nNumPar
+  IF  $ERR.Number==0 THEN
+    offset=0
+    MsgPar[1].Par_Txt[]=" "
+    SWRITE(MsgPar[1].Par_Txt[], State, offset, "%d", nNumPar)
+    MsgPar[1].Par_type=#Value
+  ELSE
+    ERR_CLEAR($ERR)
+    len=STRLEN(sTextPar[])
+    IF len>0 THEN
+      IF len>26 THEN
+        len=26
+      ENDIF
+      FOR count=1 TO len
+        MsgPar[1].Par_Txt[count]=sTextPar[count]
+      ENDFOR
+      MsgPar[1].Par_type=#Value 
+    ENDIF
+  ENDIF
+
+  nHandle=Set_KrlMsg (#STATE, Msg, MsgPar[], MsgOpt)
+
+END ;(MsgState)
+;***************************
+;Execution of  loop message
+;***************************
+GLOBAL DEF MsgLoop(sText[]:IN,sModul[]:IN)
+DECL CHAR sText[], sModul[]
+DECL CHAR sMsg[80]
+DECL CHAR sMod[24]
+DECL INT count,len
+
+  len=STRLEN(sText[])
+  IF  len>0 THEN
+    IF len>80 THEN
+      len=80
+    ENDIF
+    FOR count=1 TO len
+      sMsg[count]=sText[count]
+    ENDFOR
+  ENDIF
+  len=STRLEN(sModul[])
+  IF  len>0 THEN
+    IF len>24 THEN
+      len=24
+    ENDIF
+    FOR count=1 TO len
+      sMod[count]=sModul[count]
+    ENDFOR
+  ELSE
+    sMod[]="Appl" 
+  ENDIF
+  IF  (STRLEN(sMsg[])>0) THEN
+    IF lnHandle>0 THEN
+      WAIT FoR Clear_KrlMsg (lnHandle) OR TRUE
+      lnHandle=0
+    ENDIF
+    FOR count=1 TO STRLEN(sMsg[])
+      IF sMsg[count]<>" " THEN
+        MsgState(lnHandle, sMsg[], sMod[])
+      EXIT
+      ENDIF
+    ENDFOR  
+  ENDIF
+END ;(MsgLoop)
+;*************************************************
+;Execution of dialog message
+;parameter NoBrakes: Robot leaves brakes open
+;*************************************************
+GLOBAL DEF MsgDialog(nAnswer:OUT,sText[]:IN,sModul[]:IN,sTextPar[]:IN,sDialogSK1[]:IN,sDialogSK2[]:IN,sDialogSK3[]:IN,sDialogSK4[]:IN,sDialogSK5[]:IN,sDialogSK6[]:IN,sDialogSK7[]:IN,NoBrakes:IN, nMsgNr:IN,MsgOpt:IN)
+DECL KrlMsg_T Msg
+DECL KrlMsgPar_T MsgPar[3]
+DECL KrlMsgOpt_T MsgOpt
+DECL KrlMsgOpt_T DummyMsgOpt
+DECL KrlMsgDlgSK_T Msg_SOFTKEY[7]
+DECL INT count, len, nHandle, nAnswer, nMsgNr
+DECL BOOL NoBrakes
+DECL CHAR sText[], sModul[], sTextPar[], sDialogSK1[], sDialogSK2[], sDialogSK3[], sDialogSK4[], sDialogSK5[], sDialogSK6[], sDialogSK7[]
+DECL CHAR sMsg[80]
+
+  ON_ERROR_PROCEED 
+  DummyMsgOpt=MsgOpt
+  
+  IF ($ERR.Number<>0) THEN
+    MsgOpt.VL_Stop=TRUE ;DEFAULT setting TRUE
+    MsgOpt.Clear_P_Reset=TRUE
+    MsgOpt.Log_To_DB=FALSE
+    ERR_CLEAR($ERR)
+  ELSE
+    ERR_RAISE($ERR)
+  ENDIF
+  
+  ;Creates default values in case of none availability
+  MsgOpt=CheckOfMsgOpt(MsgOpt)
+
+  Msg.Nr=1
+  ERR_CLEAR($ERR)
+  ON_ERROR_PROCEED
+  Msg.Nr=nMsgNr
+  len=STRLEN(sText[])
+  IF  len>0 THEN
+    IF len>80 THEN
+      len=80
+    ENDIF
+    FOR count=1 TO len
+      Msg.Msg_txt[count]=sText[count]
+    ENDFOR
+  ELSE
+    Msg.Msg_txt[]="parameter sText[] is missing"
+  ENDIF
+  len=STRLEN(sModul[])
+  IF  len>0 THEN
+    IF len>24 THEN
+      len=24
+    ENDIF
+    FOR count=1 TO len
+      Msg.Modul[count]=sModul[count]
+    ENDFOR
+  ELSE
+    Msg.Modul[]="Appl" 
+  ENDIF
+
+  ERR_CLEAR($ERR)
+  ON_ERROR_PROCEED
+  len=STRLEN(sDialogSK1[])
+  IF  $ERR.Number==0 THEN
+    IF len > 0 THEN
+      IF len>24 THEN
+        len=24
+      ENDIF
+      Msg_SOFTKEY[7].Sk_Type = #KEY
+      FOR count=1 TO len
+        Msg_SOFTKEY[7].Sk_txt[count] = sDialogSK1[count]
+      ENDFOR
+    ENDIF
+  ELSE
+      FOR count=1 TO 24
+        Msg_SOFTKEY[7].Sk_txt[count] = " "
+      ENDFOR
+  ENDIF
+  ERR_CLEAR($ERR)
+  ON_ERROR_PROCEED
+  len=STRLEN(sDialogSK2[])
+  IF  $ERR.Number==0 THEN
+    len=STRLEN(sDialogSK2[])
+    IF len > 0 THEN
+      IF len>24 THEN
+        len=24
+      ENDIF
+      Msg_SOFTKEY[6].Sk_Type = #KEY
+      FOR count=1 TO len
+        Msg_SOFTKEY[6].Sk_txt[count] = sDialogSK2[count]
+      ENDFOR
+    ENDIF
+  ELSE
+      FOR count=1 TO 24
+        Msg_SOFTKEY[6].Sk_txt[count] = " "
+      ENDFOR
+  ENDIF
+  ERR_CLEAR($ERR)
+  ON_ERROR_PROCEED
+  len=STRLEN(sDialogSK3[])
+  IF  $ERR.Number==0 THEN
+    len=STRLEN(sDialogSK3[])
+    IF len > 0 THEN
+      IF len>24 THEN
+        len=24
+      ENDIF
+      Msg_SOFTKEY[5].Sk_Type = #KEY
+      FOR count=1 TO len
+        Msg_SOFTKEY[5].Sk_txt[count] = sDialogSK3[count]
+      ENDFOR
+    ENDIF
+  ELSE
+      FOR count=1 TO 24
+        Msg_SOFTKEY[5].Sk_txt[count] = " "
+      ENDFOR
+  ENDIF
+  ERR_CLEAR($ERR)
+  ON_ERROR_PROCEED
+  len=STRLEN(sDialogSK4[])
+  IF  $ERR.Number==0 THEN
+    len=STRLEN(sDialogSK4[])
+    IF len > 0 THEN
+      IF len>24 THEN
+        len=24
+      ENDIF
+      Msg_SOFTKEY[4].Sk_Type = #KEY
+      FOR count=1 TO len
+        Msg_SOFTKEY[4].Sk_txt[count] = sDialogSK4[count]
+      ENDFOR
+    ENDIF
+  ELSE
+      FOR count=1 TO 24
+        Msg_SOFTKEY[4].Sk_txt[count] = " "
+      ENDFOR
+  ENDIF
+  ERR_CLEAR($ERR)
+  ON_ERROR_PROCEED
+  len=STRLEN(sDialogSK5[])
+  IF  $ERR.Number==0 THEN
+    len=STRLEN(sDialogSK5[])
+    IF len > 0 THEN
+      IF len>24 THEN
+        len=24
+      ENDIF
+      Msg_SOFTKEY[3].Sk_Type = #KEY
+      FOR count=1 TO len
+        Msg_SOFTKEY[3].Sk_txt[count] = sDialogSK5[count]
+      ENDFOR
+    ENDIF
+  ELSE
+      FOR count=1 TO 24
+        Msg_SOFTKEY[3].Sk_txt[count] = " "
+      ENDFOR
+  ENDIF
+  ERR_CLEAR($ERR)
+  ON_ERROR_PROCEED
+  len=STRLEN(sDialogSK6[])
+  IF  $ERR.Number==0 THEN
+    len=STRLEN(sDialogSK6[])
+    IF len > 0 THEN
+      IF len>24 THEN
+        len=24
+      ENDIF
+      Msg_SOFTKEY[2].Sk_Type = #KEY
+      FOR count=1 TO len
+        Msg_SOFTKEY[2].Sk_txt[count] = sDialogSK6[count]
+      ENDFOR
+    ENDIF
+  ELSE
+      FOR count=1 TO 24
+        Msg_SOFTKEY[2].Sk_txt[count] = " "
+      ENDFOR
+  ENDIF
+  ERR_CLEAR($ERR)
+  ON_ERROR_PROCEED
+  len=STRLEN(sDialogSK7[])
+  IF  $ERR.Number==0 THEN
+    len=STRLEN(sDialogSK7[])
+    IF len > 0 THEN
+      IF len>24 THEN
+        len=24
+      ENDIF
+      Msg_SOFTKEY[1].Sk_Type = #KEY
+      FOR count=1 TO len
+        Msg_SOFTKEY[1].Sk_txt[count] = sDialogSK7[count]
+      ENDFOR
+    ENDIF
+  ELSE
+      FOR count=1 TO 24
+        Msg_SOFTKEY[1].Sk_txt[count] = " "
+      ENDFOR
+  ENDIF
+  len=STRLEN(sTextPar[])
+  IF  len>0 THEN
+    IF len>26 THEN
+      len=26
+    ENDIF
+    FOR count=1 TO len
+      MsgPar[1].Par_Txt[count]=sTextPar[count]
+    ENDFOR
+    MsgPar[1].Par_type=#Value 
+  ENDIF
+    
+  nHandle=SET_KRLDLG(Msg, MsgPar[], Msg_SOFTKEY[], MsgOpt)
+
+  ERR_CLEAR($ERR)
+  ON_ERROR_PROCEED
+  NoBrakes=NoBrakes
+  IF  NOT($ERR.Number==0) THEN
+    NoBrakes=FALSE
+  ENDIF
+  IF (nHandle > 0) THEN
+     WHILE (Exists_KrlDlg(nHandle, nAnswer))
+        WAIT SEC 0.5
+        IF NoBrakes THEN
+          PTP $AXIS_ACT
+        ENDIF
+     ENDWHILE
+  ENDIF
+END ;(MsgDialog)
+;*************************************************
+;Execution of notify message with text parameter
+;*************************************************
+GLOBAL DEF MsgNotifyTextPar(sText[]:IN, sModul[]:IN, nNumPar:IN, sTextPar[]:IN, sTextPar2[]:IN, nMsgNr:IN,MsgOpt:IN)
+DECL CHAR sText[], sModul[], sTextPar[], sTextPar2[]
+DECL KrlMsg_T Msg
+DECL EKrlMsgType MsgType
+DECL KrlMsgParType_T MsgParType
+DECL KrlMsgPar_T MsgPar[3]
+DECL KrlMsgOpt_T MsgOpt
+DECL KrlMsgOpt_T DummyMsgOpt
+DECL State_T State
+DECL INT count, len, offset, nNumPar, nHandle, nMsgNr
+
+  ON_ERROR_PROCEED 
+  DummyMsgOpt=MsgOpt
+  
+  IF ($ERR.Number<>0) THEN
+    MsgOpt.VL_Stop=TRUE ;DEFAULT setting TRUE
+    MsgOpt.Clear_P_Reset=TRUE
+    MsgOpt.Log_To_DB=FALSE
+    ERR_CLEAR($ERR)
+  ELSE
+    ERR_RAISE($ERR)
+  ENDIF
+  
+  ;Creates default values in case of none availability
+  MsgOpt=CheckOfMsgOpt(MsgOpt)
+
+  MsgType=#Notify
+  Msg.Nr=1
+  ERR_CLEAR($ERR)
+  ON_ERROR_PROCEED
+  Msg.Nr=nMsgNr
+  len=STRLEN(sText[])
+  IF  len>0 THEN
+   IF len>80 THEN
+     len=80
+   ENDIF
+   FOR count=1 TO len
+     Msg.Msg_txt[count]=sText[count]
+   ENDFOR
+  ELSE
+   Msg.Msg_txt[]="parameter sText[] is missing"
+  ENDIF
+  len=STRLEN(sModul[])
+  IF  len>0 THEN
+   IF len>24 THEN
+     len=24
+   ENDIF
+   FOR count=1 TO len
+     Msg.Modul[count]=sModul[count]
+   ENDFOR
+  ELSE
+   Msg.Modul[]="Appl" 
+  ENDIF
+  offset=nNumPar
+  IF  nNumPar==0 THEN
+    ; 1st Parameter
+    len=STRLEN(sTextPar[])
+    IF len>0 THEN
+       IF len>26 THEN
+          len=26
+       ENDIF
+       FOR count=1 TO len
+          MsgPar[1].Par_Txt[count]=sTextPar[count]
+       ENDFOR
+       MsgPar[1].Par_type=#Value 
+    ENDIF  
+    ; 2nd Parameter
+    len=STRLEN(sTextPar2[])
+    IF len>0 THEN
+       IF len>26 THEN
+          len=26
+       ENDIF
+       FOR count=1 TO len
+          MsgPar[2].Par_Txt[count]=sTextPar2[count]
+       ENDFOR
+       MsgPar[2].Par_type=#Value 
+    ENDIF  
+  ELSE
+    offset=0
+    MsgPar[1].Par_Txt[]=" "
+    SWRITE(MsgPar[1].Par_Txt[], State, Offset, "%d", nNumPar)
+    MsgPar[1].Par_type=#Value
+  ENDIF
+
+  nHandle=Set_KrlMsg (MsgType, Msg, MsgPar[], MsgOpt)
+
+END ;(MsgNotifyTextPar)
+;*****************************
+;* Check of missing elements *
+;*****************************
+DEFFCT KrlMsgOpt_T CheckOfMsgOpt(LocalMsgOpt:IN)
+DECL KrlMsgOpt_T LocalMsgOpt      ;Bool-elements: VL_Stop,Clear_P_Reset,Log_To_DB
+DECL KrlMsgOpt_T DummyMsgOpt
+
+  ;Default Values: MsgOpt={ VL_Stop TRUE, Clear_P_Reset TRUE, Log_To_DB False } 
+  
+  ON_ERROR_PROCEED 
+  DummyMsgOpt.VL_Stop=LocalMsgOpt.VL_Stop
+  IF ($ERR.Number<>0) THEN
+   LocalMsgOpt.VL_Stop=TRUE ;DEFAULT setting TRUE
+   ERR_CLEAR($ERR)
+  ELSE
+   ERR_RAISE($ERR)
+  ENDIF
+
+  ON_ERROR_PROCEED 
+  DummyMsgOpt.Clear_P_Reset=LocalMsgOpt.Clear_P_Reset
+  IF ($ERR.Number<>0) THEN
+   LocalMsgOpt.Clear_P_Reset=TRUE ;DEFAULT setting TRUE
+   ERR_CLEAR($ERR)
+  ELSE
+   ERR_RAISE($ERR)
+  ENDIF
+
+  ON_ERROR_PROCEED 
+  DummyMsgOpt.Log_To_DB=LocalMsgOpt.Log_To_DB
+  IF ($ERR.Number<>0) THEN
+   LocalMsgOpt.Log_To_DB=FALSE ;DEFAULT setting FALSE
+   ERR_CLEAR($ERR)
+  ELSE
+   ERR_RAISE($ERR)
+  ENDIF
+
+  RETURN(LocalMsgOpt)
+  
+ENDFCT ;(CheckOfMsgOpt)

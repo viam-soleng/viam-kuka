@@ -1,0 +1,160 @@
+&ACCESS  RV
+&PARAM EDITMASK = *
+&PARAM TEMPLATE = c:\KRC\Roboter\Template\vorgabe
+&REL 3
+DEFDAT  EKIGLOBALS PUBLIC
+;Copyright (C) 2020 KUKA Robotics Corporation
+;fold Disclaimer
+; This sample code is provided as is and any express or implied warranties, 
+; including the implied warranties of merchantability and fitness
+; for a particular purpose are disclaimed. In no event shall KUKA or contributors
+; be liable for any direct, indirect, incidental, special, exemplary, or consequential
+; damages (including, but not limited to, procurement of substitute goods or services;
+; loss of use, data, or profits; or business interruption) sustained by you or a third
+; party, however caused and on any theory of liability, whether in contract, strict 
+; liability, or tort arising in any way out of the use of this sample code, even if 
+; advised of the possibility of such damage.
+;endfold
+GLOBAL CHAR ekiConfigFile[128]
+ekiConfigFile[]="ekiManagerConfig"
+GLOBAL INT ekiReveiveFlagNum=10
+GLOBAL INT ekiAliveFlagNum=1
+GLOBAL ENUM eki_cmd_type NONE,PTP_TO_CART,PTP_TO_JOINT,PTP_TO_FRAME,SET_HOME,SET_TOOL_DATA,SET_BASE_DATA,SET_LOAD_DATA,SET_OVERRIDE,GET_ROB_TYPE,GET_ROB_NAME,IS_HOME,GET_ROB_SN,GET_TOOL_DATA,GET_LOAD_DATA,GET_BASE_DATA,GET_CURR_POS,GET_CURR_POS_IN_WORLD,GET_CURR_JOINT,GET_CURR_OVERRIDE,GET_POS_JOINT_LIM,GET_NEG_JOINT_LIM,GET_MAX_JOINT_SPEED,GET_MAX_JOINT_ACCEL,SET_JOINT_SPEED,SET_CART_SPEED,SET_JOINT_ACCEL,SET_CART_ACCEL,GET_SW_VERSION,GET_ABS_ACCUR,GET_PROG_INFO,GET_OP_MODE,GET_NUM_ROB_AXES,GET_NUM_EXT_AXES,GET_BRK_DELAY,GET_HOME_POS,GET_ROBRUNTIME,GET_RUNMODE,GET_MADA_DH,GET_ROBROOT,GET_MAMES,GET_GEAR_RATIOS,GET_STOP_MESS,CLEAR_BUFFER,RESET_COMMAND,BAD_COMMAND
+GLOBAL STRUC eki_data_type eki_cmd_type ekiCmd,CHAR cmdName[32],INT cmdId,E6AXIS jointVal,E6POS cartVal,INT integerVal,REAL realVal,CHAR stringInput[32]
+GLOBAL STRUC parsed_strm_type CHAR Str[100]
+DECL GLOBAL eki_data_type cmdData
+GLOBAL BOOL commandAvailable=FALSE
+GLOBAL BOOL prevConnectedFlag=FALSE
+GLOBAL BOOL flushConnectionFlag=FALSE
+DECL GLOBAL STATE_T state
+GLOBAL INT offset
+GLOBAL BOOL debugFlag=TRUE
+GLOBAL BOOL useCommandId=FALSE
+
+;fold MOTION COMMANDS
+
+GLOBAL CHAR ptpToJointPos[30]
+ptpToJointPos[]="ptpToJointPos"
+GLOBAL CHAR ptpToCartPos[30]
+ptpToCartPos[]="ptpToCartPos"
+GLOBAL CHAR ptpToFrame[30]
+ptpToFrame[]="ptpToFrame"
+
+; legacy
+GLOBAL CHAR goToJointPos[30]
+goToJointPos[]="goToJointPos"
+GLOBAL CHAR goToCartPos[30]
+goToCartPos[]="goToCartPos"
+GLOBAL CHAR goToFrame[30]
+goToFrame[]="goToFrame"
+;endfold
+
+;fold SET COMMANDS
+GLOBAL CHAR setHome[30]
+setHome[]="setHome"
+GLOBAL CHAR setToolData[30]
+setToolData[]="setToolData"
+GLOBAL CHAR SetBaseData[30]
+SetBaseData[]="SetBaseData"
+GLOBAL CHAR SetLoadData[30]
+SetLoadData[]="setLoadData"
+GLOBAL CHAR setOverride[30]
+setOverride[]="setOverride"
+GLOBAL CHAR setJointSpeed[30]
+setJointSpeed[]="setJointSpeed"
+GLOBAL CHAR setJointAccel[30]
+setJointAccel[]="setJointAccel"
+GLOBAL CHAR setCartSpeed[30]
+setCartSpeed[]="setCartSpeed"
+GLOBAL CHAR setCartAccel[30]
+setCartAccel[]="setCartAccel"
+GLOBAL CHAR resetCommand[30]
+resetCommand[]="resetCommand"
+GLOBAL CHAR clearBuffer[30]
+clearBuffer[]="clearBuffer"
+;endfold
+
+;fold GET COMMANDS
+GLOBAL CHAR getToolData[30]
+getToolData[]="getToolData"
+GLOBAL CHAR getLoadData[30]
+getLoadData[]="getLoadData"
+GLOBAL CHAR getBaseData[30]
+getBaseData[]="getBaseData"
+GLOBAL CHAR getRobotType[30]
+getRobotType[]="getRobotType"
+GLOBAL CHAR getRobotName[30]
+getRobotName[]="getRobotName"
+GLOBAL CHAR getAbsAccur[30]
+getAbsAccur[]="getabsaccurstatus"
+GLOBAL CHAR getRobotSerialNum[30]
+getRobotSerialNum[]="getRobotSerialNum"
+GLOBAL CHAR getSoftwareVersion[30]
+getSoftwareVersion[]="GetSoftwareVersion"
+GLOBAL CHAR getOverride[30]
+getOverride[]="getOverride"
+GLOBAL CHAR getCurrentPos[30]
+getCurrentPos[]="getCurrentPos"
+GLOBAL CHAR getCurrentPosInWorld[30]
+getCurrentPosInWorld[]="getCurrentPosInWorld"
+GLOBAL CHAR getCurrentJoints[30]
+getCurrentJoints[]="getCurrentJoints"
+GLOBAL CHAR getPosJntLim[30]
+getPosJntLim[]="getPosJntLim"
+GLOBAL CHAR getNegJntLim[30]
+getNegJntLim[]="getNegJntLim"
+GLOBAL CHAR getMaxJointSpeed[30]
+getMaxJointSpeed[]="getMaxJointSpeed"
+GLOBAL CHAR getMaxJointAccel[30]
+getMaxJointAccel[]="getMaxJointAccel"
+GLOBAL CHAR getGearRatios[30]
+getGearRatios[]="getGearRatios"
+GLOBAL CHAR getStopMessage[30]
+getStopMessage[]="getStopMessage"
+GLOBAL CHAR getProgramInfo[30]
+getProgramInfo[]="getProgramInfo"
+GLOBAL CHAR getOperatingMode[30]
+getOperatingMode[]="getOperatingMode"
+GLOBAL CHAR getNumRobotAxes[30]
+getNumRobotAxes[]="getNumRobotAxes"
+GLOBAL CHAR getNumExternalAxes[30]
+getNumExternalAxes[]="getNumExternalAxes"
+GLOBAL CHAR getBrakeDelay[30]
+getBrakeDelay[]="getBrakeDelay"
+GLOBAL CHAR isHome[30]
+isHome[]="isHome"
+GLOBAL CHAR getHomePos[30]
+getHomePos[]="getHomePos"
+GLOBAL CHAR getRobRunTime[30]
+getRobRunTime[]="getRobRunTime"
+GLOBAL CHAR getRunMode[30]
+getRunMode[]="getRunMode"
+GLOBAL CHAR getMadaDh[30]
+getMadaDh[]="getMadaDh"
+GLOBAL CHAR getRobroot[30]
+getRobroot[]="getRobroot"
+GLOBAL CHAR getMamesValues[30]
+getMamesValues[]="getMamesValues"
+;endfold
+
+;fold RETURN STRINGS
+GLOBAL CHAR ekiSuccess[30]
+ekiSuccess[]="success"
+GLOBAL CHAR ekiInvalidValue[30]
+ekiInvalidValue[]="invalidValue"
+GLOBAL CHAR ekiInvalidCmd[30]
+ekiInvalidCmd[]="invalidCommand"
+GLOBAL CHAR ekiBusy[30]
+ekiBusy[]="robotBusy"
+GLOBAL CHAR absAccurNone[30]
+absAccurNone[]="none"
+GLOBAL CHAR absAccurActive[30]
+absAccurActive[]="active"
+GLOBAL CHAR absAccurInactive[30]
+absAccurInactive[]="inactive"
+GLOBAL CHAR boolTrue[30]
+boolTrue[]="true"
+GLOBAL CHAR boolFalse[30]
+boolFalse[]="false"
+;endfold
+ENDDAT

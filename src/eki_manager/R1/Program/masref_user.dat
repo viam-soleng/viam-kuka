@@ -1,0 +1,26 @@
+&ACCESS RV
+&COMMENT Mastering Reference User Program
+&PARAM DISKPATH = KRC:\R1\Program
+&PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
+&PARAM EDITMASK = *
+DEFDAT MasRef_User PUBLIC
+;FOLD EXTERNAL DECLARATIONS;%{PE}%MKUKATPBASIS,%CEXT,%VCOMMON,%P
+;FOLD BASISTECH EXT;%{PE}%MKUKATPBASIS,%CEXT,%VEXT,%P
+  EXT  BAS (BAS_COMMAND  :IN,REAL  :IN )
+;ENDFOLD (BASISTECH EXT)
+;FOLD USER EXT;%{E}%MKUKATPUSER,%CEXT,%VEXT,%P
+;Make here your modifications
+
+;ENDFOLD (USER EXT)
+;ENDFOLD (EXTERNAL DECLERATIONS)
+;FOLD reference groups
+; order of master reference group number in array is of no relevance, but group "1" is required
+; "0" means no master reference test
+; "1" means group number for robot axes and robroot kinematic axes
+; "2", "3" means group number of external kinematic axes
+DECL GLOBAL CONST INT MASREFg_GroupSequence[3] ; contains reference groups to test
+MASREFg_GroupSequence[1]=1 
+MASREFg_GroupSequence[2]=0
+MASREFg_GroupSequence[3]=0
+;ENDFOLD (reference groups)
+ENDDAT

@@ -1,0 +1,30 @@
+&ACCESS RV
+&REL 1
+&COMMENT Mastering Reference Main Task
+&PARAM EDITMASK = *
+&PARAM DISKPATH = KRC:\R1\System
+DEFDAT  MASREF_MAIN
+;FOLD EXTERNAL DECLARATIONS;%{PE}%MKUKATPBASIS,%CEXT,%VCOMMON,%P
+;FOLD BASISTECH EXT;%{PE}%MKUKATPBASIS,%CEXT,%VEXT,%P
+EXT  BAS (BAS_COMMAND  :IN,REAL  :IN )
+;ENDFOLD (BASISTECH EXT)
+;FOLD USER EXT;%{E}%MKUKATPUSER,%CEXT,%VEXT,%P
+;ENDFOLD (USER EXT)
+;ENDFOLD (EXTERNAL DECLERATIONS)
+;FOLD Messages
+DECL CONST CHAR MASREF_Modulname[6]
+MASREF_Modulname[]="MasRef"
+DECL KRLMSGOPT_T MASREF_MsgOptWithLogging={VL_STOP TRUE,CLEAR_P_RESET TRUE,LOG_TO_DB TRUE}
+DECL INT MASREF_StateMsgHandle=0 ; 0=> no handle exists
+;ENDFOLD (Messages)
+;FOLD timeout
+DECL CONST REAL MASREF_TimeoutOneCycle=0.096 ; one wait cycle is 8*12ms=96ms
+DECL CONST INT MASREF_nLapsedTimeout=30 ; means ca. 3s
+DECL INT MASREF_nLapsedTime=0 ; actual count of wait cycle 
+;ENDFOLD (timeout)
+;FOLD reference groups
+DECL CONST INT MASREF_GroupSequenceSize=3 ; length of sequence list for reference groups
+DECL INT MASREF_GroupSequenceIdx=0 ; for iteration over the array of group sequence
+DECL INT MASREF_GroupNumber=0 ; actual group under test
+;ENDFOLD (reference groups)
+ENDDAT

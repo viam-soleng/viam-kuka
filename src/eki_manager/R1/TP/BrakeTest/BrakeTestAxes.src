@@ -1,0 +1,30 @@
+&ACCESS RVP
+&REL 1
+&COMMENT BrkTst-main task for unconfigured brake test axes
+&PARAM EDITMASK = *
+&PARAM DISKPATH = KRC:\R1\TP\BrakeTest
+DEF BRAKETESTAXES(AxesBitMask: IN)
+;BRAKETESTAXES(AxesBitMask: IN)
+;examples for parameter AxesBitMask
+;no parameter or -1 means all configured axes
+;'b00000000000011' means axis 1 and 2
+;'b10000000000001' means axis 1 and 12
+;'b11000000000000' means axis 11 and 12
+;fold {h}
+INT AxesBitMask
+
+ON_ERROR_PROCEED 
+AxesBitMask=AxesBitMask*1
+
+IF ($ERR.Number<>0) THEN
+  AxesBitMask=-1
+  ERR_CLEAR($ERR)
+ELSE
+  ERR_RAISE($ERR)
+ENDIF
+
+gBraketestForce=true
+BRAKETESTREQ(AxesBitMask)
+gBraketestForce=false
+
+END

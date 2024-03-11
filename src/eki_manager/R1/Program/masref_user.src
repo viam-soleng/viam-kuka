@@ -1,0 +1,42 @@
+&ACCESS RV
+&REL 1
+&COMMENT Mastering Reference User Program
+&PARAM DISKPATH = KRC:\R1\Program
+DEF MasRef_USER()
+END 
+
+GLOBAL DEF MASREFSTARTG1()
+;FOLD Teach path and position for reference group 1
+;ENDFOLD
+
+END
+
+GLOBAL DEF MASREFBACKG1()
+;FOLD Teach path back for reference group 1
+;ENDFOLD
+
+END
+
+GLOBAL DEF MASREFSTARTG2()
+;FOLD Teach path and position for reference group 2
+;ENDFOLD
+
+END
+
+GLOBAL DEF MASREFBACKG2()
+;FOLD Teach path back for reference group 2
+;ENDFOLD
+
+END
+
+GLOBAL DEF MASREFSTARTG3()
+;FOLD Teach path and position for reference group 3
+;ENDFOLD
+
+END
+
+GLOBAL DEF MASREFBACKG3()
+;FOLD Teach path back for reference group 3
+;ENDFOLD
+
+END

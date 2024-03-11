@@ -1,0 +1,961 @@
+&ACCESS RVO3
+&REL 11
+&PARAM EDITMASK = *
+&PARAM TEMPLATE = c:\KRC\Roboter\Template\vorgabe
+def ekiUtils( )
+   ;Copyright (C) 2020 KUKA Robotics Corporation
+   ;fold Disclaimer
+      ; This sample code is provided as is and any express or implied warranties, 
+      ; including the implied warranties of merchantability and fitness
+      ; for a particular purpose are disclaimed. In no event shall KUKA or contributors
+      ; be liable for any direct, indirect, incidental, special, exemplary, or consequential
+      ; damages (including, but not limited to, procurement of substitute goods or services;
+      ; loss of use, data, or profits; or business interruption) sustained by you or a third
+      ; party, however caused and on any theory of liability, whether in contract, strict 
+      ; liability, or tort arising in any way out of the use of this sample code, even if 
+      ; advised of the possibility of such damage.
+   ;endfold
+end
+
+global deffct eki_status ConnectToHost(ekiConfigFile[]:OUT)
+   char ekiConfigFile[]
+   decl eki_status ret
+   ret = eki_init(ekiConfigFile[])
+   eki_check(ret,#QUIT)
+   ret = eki_open(ekiConfigFile[])
+   eki_check(ret,#QUIT)
+   return ret
+endfct
+
+; Reopens the channel
+;global def reconnect(ekiConfigFile[]:OUT)
+   ;char ekiConfigFile[]
+   ;decl eki_status ret
+   ;msgNotify("Re-opening channel ...")
+   ;ret = {Buff 0, Read 0, Msg_no 0, Connected false}
+   ;eki_check(ret, #Notify, ekiConfigFile[])
+   ;wait sec 0.1
+   ;ret = eki_clearBuffer(ekiConfigFile[], "Buffer")
+   ;wait sec 0.1
+   ;ret = eki_close(ekiConfigFile[])
+   ;wait sec 0.1
+   ;ret = eki_open(ekiConfigFile[])
+   ;msgNotify("Channel opened")
+;end
+
+global def reconnect(ekiConfigFile[]:OUT)
+   char ekiConfigFile[]
+   decl eki_status ret
+   msgNotify("Re-opening channel ...")
+   commandAvailable = false;
+   ret = eki_close(ekiConfigFile[])
+   wait sec 0.1
+   ret = eki_clear(ekiConfigFile[])
+   wait sec 0.1
+   ret = eki_init(ekiConfigFile[])
+   wait sec 0.1
+   ret = eki_open(ekiConfigFile[])
+   msgNotify("Channel opened")
+end
+
+; Parses a command
+global def GetCommand(ekiConfigFile[]:IN, cmdData:OUT)
+   char ekiConfigFile[]
+   decl parsed_strm_type ParsedStrings[20]
+   char Stream[1000]
+   int NumStrings
+   decl eki_data_type cmdData
+   decl eki_status ret
+   bool bRet
+   int idx
+   ;; read the stream
+   bRet = strClear(Stream[])
+   Stream[] = " "
+   ret = eki_GetString(ekiConfigFile[], "Buffer", Stream[])
+   eki_check(ret, #QUIT)
+   clearCommand(cmdData)
+   if debugFlag then
+      msgNotify(Stream[]) ;
+   endif
+   
+   ; Parse the stream
+   ParseStream(Stream[], ParsedStrings[], NumStrings)
+   if useCommandId then
+      bRet = StrToInt(ParsedStrings[2].Str[], cmdData.cmdId)
+      idx = 3
+   else
+      cmdData.cmdId = 0
+      idx = 2
+   endif
+   
+   bRet = strClear(cmdData.cmdName[])
+   cmdData.cmdName[] = ParsedStrings[1].Str[]
+   
+   ;fold MOTION COMMANDS 
+      if StrComp(ParsedStrings[1].Str[], goToJointPos[], #NOT_CASE_SENS) or StrComp(ParsedStrings[1].Str[], ptpToJointPos[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #PTP_TO_JOINT
+         ; The next next 12 values are the axis values
+         bRet = StrToReal(ParsedStrings[idx].Str[], cmdData.jointVal.A1)
+         bRet = StrToReal(ParsedStrings[idx+1].Str[], cmdData.jointVal.A2)
+         bRet = StrToReal(ParsedStrings[idx+2].Str[], cmdData.jointVal.A3)
+         bRet = StrToReal(ParsedStrings[idx+3].Str[], cmdData.jointVal.A4)
+         bRet = StrToReal(ParsedStrings[idx+4].Str[], cmdData.jointVal.A5)
+         bRet = StrToReal(ParsedStrings[idx+5].Str[], cmdData.jointVal.A6)
+         bRet = StrToReal(ParsedStrings[idx+6].Str[], cmdData.jointVal.E1)
+         bRet = StrToReal(ParsedStrings[idx+7].Str[], cmdData.jointVal.E2)
+         bRet = StrToReal(ParsedStrings[idx+8].Str[], cmdData.jointVal.E3)
+         bRet = StrToReal(ParsedStrings[idx+9].Str[], cmdData.jointVal.E4)
+         bRet = StrToReal(ParsedStrings[idx+10].Str[], cmdData.jointVal.E5)
+         bRet = StrToReal(ParsedStrings[idx+11].Str[], cmdData.jointVal.E6)
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], goToCartPos[], #NOT_CASE_SENS) or StrComp(ParsedStrings[1].Str[], ptpToCartPos[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #PTP_TO_CART
+         ; The next next values are the axis values
+         bRet = StrToReal(ParsedStrings[idx].Str[], cmdData.cartVal.X)
+         bRet = StrToReal(ParsedStrings[idx+1].Str[], cmdData.cartVal.Y)
+         bRet = StrToReal(ParsedStrings[idx+2].Str[], cmdData.cartVal.Z)
+         bRet = StrToReal(ParsedStrings[idx+3].Str[], cmdData.cartVal.A)
+         bRet = StrToReal(ParsedStrings[idx+4].Str[], cmdData.cartVal.B)
+         bRet = StrToReal(ParsedStrings[idx+5].Str[], cmdData.cartVal.C)
+         bRet = StrToInt(ParsedStrings[idx+6].Str[], cmdData.cartVal.S)
+         bRet = StrToInt(ParsedStrings[idx+7].Str[], cmdData.cartVal.T)
+         bRet = StrToReal(ParsedStrings[idx+8].Str[], cmdData.cartVal.E1)
+         bRet = StrToReal(ParsedStrings[idx+9].Str[], cmdData.cartVal.E2)
+         bRet = StrToReal(ParsedStrings[idx+10].Str[], cmdData.cartVal.E3)
+         bRet = StrToReal(ParsedStrings[idx+11].Str[], cmdData.cartVal.E4)
+         bRet = StrToReal(ParsedStrings[idx+12].Str[], cmdData.cartVal.E5)
+         bRet = StrToReal(ParsedStrings[idx+13].Str[], cmdData.cartVal.E6)
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], goToFrame[], #NOT_CASE_SENS) or StrComp(ParsedStrings[1].Str[], ptpToFrame[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #PTP_TO_FRAME
+         ; The next next values are the axis values
+         bRet = StrToReal(ParsedStrings[idx].Str[], cmdData.cartVal.X)
+         bRet = StrToReal(ParsedStrings[idx+1].Str[], cmdData.cartVal.Y)
+         bRet = StrToReal(ParsedStrings[idx+2].Str[], cmdData.cartVal.Z)
+         bRet = StrToReal(ParsedStrings[idx+3].Str[], cmdData.cartVal.A)
+         bRet = StrToReal(ParsedStrings[idx+4].Str[], cmdData.cartVal.B)
+         bRet = StrToReal(ParsedStrings[idx+5].Str[], cmdData.cartVal.C)
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], setOverride[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #SET_OVERRIDE
+         bRet = StrToint(ParsedStrings[idx].Str[], cmdData.integerVal)
+         return
+      endif   
+   ;endfold
+   
+   ;fold SET COMMANDS
+      if StrComp(ParsedStrings[1].Str[], setHome[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #SET_HOME
+         ; The next next 12 values are the axis values
+         bRet = StrToReal(ParsedStrings[idx].Str[], cmdData.jointVal.A1)
+         bRet = StrToReal(ParsedStrings[idx+1].Str[], cmdData.jointVal.A2)
+         bRet = StrToReal(ParsedStrings[idx+2].Str[], cmdData.jointVal.A3)
+         bRet = StrToReal(ParsedStrings[idx+3].Str[], cmdData.jointVal.A4)
+         bRet = StrToReal(ParsedStrings[idx+4].Str[], cmdData.jointVal.A5)
+         bRet = StrToReal(ParsedStrings[idx+5].Str[], cmdData.jointVal.A6)
+         bRet = StrToReal(ParsedStrings[idx+6].Str[], cmdData.jointVal.E1)
+         bRet = StrToReal(ParsedStrings[idx+7].Str[], cmdData.jointVal.E2)
+         bRet = StrToReal(ParsedStrings[idx+8].Str[], cmdData.jointVal.E3)
+         bRet = StrToReal(ParsedStrings[idx+9].Str[], cmdData.jointVal.E4)
+         bRet = StrToReal(ParsedStrings[idx+10].Str[], cmdData.jointVal.E5)
+         bRet = StrToReal(ParsedStrings[idx+11].Str[], cmdData.jointVal.E6)
+         return
+      endif  
+      
+      if StrComp(ParsedStrings[1].Str[], setToolData[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #SET_TOOL_DATA
+         bRet = StrToReal(ParsedStrings[idx].Str[], cmdData.cartVal.X)
+         bRet = StrToReal(ParsedStrings[idx+1].Str[], cmdData.cartVal.Y)
+         bRet = StrToReal(ParsedStrings[idx+2].Str[], cmdData.cartVal.Z)
+         bRet = StrToReal(ParsedStrings[idx+3].Str[], cmdData.cartVal.A)
+         bRet = StrToReal(ParsedStrings[idx+4].Str[], cmdData.cartVal.B)
+         bRet = StrToReal(ParsedStrings[idx+5].Str[], cmdData.cartVal.C)
+         return
+      endif   
+      
+      if StrComp(ParsedStrings[1].Str[], SetBaseData[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #SET_BASE_DATA
+         bRet = StrToReal(ParsedStrings[idx].Str[], cmdData.cartVal.X)
+         bRet = StrToReal(ParsedStrings[idx+1].Str[], cmdData.cartVal.Y)
+         bRet = StrToReal(ParsedStrings[idx+2].Str[], cmdData.cartVal.Z)
+         bRet = StrToReal(ParsedStrings[idx+3].Str[], cmdData.cartVal.A)
+         bRet = StrToReal(ParsedStrings[idx+4].Str[], cmdData.cartVal.B)
+         bRet = StrToReal(ParsedStrings[idx+5].Str[], cmdData.cartVal.C)
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], SetLoadData[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #SET_LOAD_DATA
+         bRet = StrToReal(ParsedStrings[idx].Str[], cmdData.RealVal)
+         bRet = StrToReal(ParsedStrings[idx+1].Str[], cmdData.cartVal.X)
+         bRet = StrToReal(ParsedStrings[idx+2].Str[], cmdData.cartVal.Y)
+         bRet = StrToReal(ParsedStrings[idx+3].Str[], cmdData.cartVal.Z)
+         bRet = StrToReal(ParsedStrings[idx+4].Str[], cmdData.cartVal.A)
+         bRet = StrToReal(ParsedStrings[idx+5].Str[], cmdData.cartVal.B)
+         bRet = StrToReal(ParsedStrings[idx+6].Str[], cmdData.cartVal.C)
+         bRet = StrToReal(ParsedStrings[idx+7].Str[], cmdData.cartVal.E1)
+         bRet = StrToReal(ParsedStrings[idx+8].Str[], cmdData.cartVal.E2)
+         bRet = StrToReal(ParsedStrings[idx+9].Str[], cmdData.cartVal.E3)
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], setJointSpeed[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #SET_JOINT_SPEED
+         bRet = StrToReal(ParsedStrings[idx].Str[], cmdData.realVal) 
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], setCartSpeed[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #SET_CART_SPEED
+         bRet = StrToReal(ParsedStrings[idx].Str[], cmdData.realVal) 
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], setJointAccel[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #SET_JOINT_ACCEL
+         bRet = StrToReal(ParsedStrings[idx].Str[], cmdData.realVal) 
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], setCartAccel[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #SET_CART_ACCEL
+         bRet = StrToReal(ParsedStrings[idx].Str[], cmdData.realVal) 
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], resetCommand[], #NOT_CASE_SENS) then
+         commandAvailable = false;
+         cmdData.ekiCmd = #NONE
+         ret = SendString(ekiConfigFile[], cmdData.cmdId, cmdData.cmdName[], ekiSuccess[])
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], clearBuffer[], #NOT_CASE_SENS) then
+         cmdData.ekiCmd = #NONE
+         ret =  eki_clearBuffer(ekiConfigFile[], "Buffer")
+         ret = SendString(ekiConfigFile[], cmdData.cmdId, cmdData.cmdName[], ekiSuccess[])
+         return
+      endif
+      
+   ;endfold
+   
+   ;fold GET COMMANDS
+      if StrComp(ParsedStrings[1].Str[], getRobotType[], #NOT_CASE_SENS) then
+         cmdData.ekiCmd = #GET_ROB_TYPE
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getRobotName[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_ROB_NAME
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getBrakeDelay[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_BRK_DELAY
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getAbsAccur[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_ABS_ACCUR
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getOperatingMode[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_OP_MODE
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getRobotSerialNum[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_ROB_SN
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getSoftwareVersion[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_SW_VERSION
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getOverride[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_CURR_OVERRIDE
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getNumRobotAxes[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_NUM_ROB_AXES
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getNumExternalAxes[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_NUM_EXT_AXES
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getProgramInfo[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_PROG_INFO
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getStopMessage[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_STOP_MESS
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getCurrentPos[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_CURR_POS
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getCurrentPosInWorld[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_CURR_POS_IN_WORLD
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getCurrentJoints[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_CURR_JOINT
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getNegJntLim[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_NEG_JOINT_LIM
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getPosJntLim[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_POS_JOINT_LIM
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getGearRatios[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_GEAR_RATIOS
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getMaxJointSpeed[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_MAX_JOINT_SPEED
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getMaxJointAccel[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_MAX_JOINT_ACCEL
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getToolData[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_TOOL_DATA
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getLoadData[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_Load_DATA
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getBaseData[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_BASE_DATA
+         return
+      endif
+            
+      if StrComp(ParsedStrings[1].Str[], isHome[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #IS_HOME
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getHomePos[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_HOME_POS
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getMamesValues[], #NOT_CASE_SENS) then
+         cmdData.ekicmd = #GET_MAMES
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getRobRuntime[], #NOT_CASE_SENS) then
+         cmdData.ekiCmd = #GET_ROBRUNTIME
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getRunMode[], #NOT_CASE_SENS) then
+         cmdData.ekiCmd = #GET_RUNMODE
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getMadaDh[], #NOT_CASE_SENS) then
+         cmdData.ekiCmd = #GET_MADA_DH
+         return
+      endif
+      
+      if StrComp(ParsedStrings[1].Str[], getRobroot[], #NOT_CASE_SENS) then
+         cmdData.ekiCmd = #GET_ROBROOT
+         return
+      endif
+   ;endfold
+   
+   ;; unsupported
+   cmdData.ekicmd = #BAD_COMMAND
+end
+
+global def ParseStream(StrIn[]:OUT, StrOut[]:OUT, NumStrings:OUT)
+   char StrIn[], StrInTemp[1000]
+   decl parsed_strm_type StrOut[]
+   int NumStrings, index1, index2, i
+   bool bRet
+   
+   NumStrings = 0
+   index1 = 0
+   repeat
+      index2 = StrFind(index1+1, StrIn[], ",", #NOT_CASE_SENS)
+      if index2 <> 0 then
+         NumStrings = NumStrings+1
+         bRet = strClear(StrOut[NumStrings].Str[])
+         for i = index1+1 to index1 + index2-1
+            StrOut[NumStrings].Str[i-index1] = StrIn[i]
+         endfor
+         index1 = index1 + index2
+      endif 
+   until index2 == 0
+   
+   ;; get the last (or only) string
+   NumStrings = NumStrings + 1
+   bRet = strClear(StrOut[NumStrings].Str[])
+   for i = 1 to StrLen(StrIn[])-index1 ;-1 ;; we don't want \n
+      StrOut[NumStrings].Str[i] = StrIn[i+index1]
+   endfor
+end
+
+global deffct eki_status SendString(ekiConfigFile[]:OUT, id:in, cmdName[]:out, Str2Send[]:OUT)
+   char ekiConfigFile[], cmdName[], Str2Send[]
+   int id
+   char StrOut[1000]
+   decl eki_status ret
+   
+   offset = 0
+   if useCommandId then
+      swrite(StrOut[], state, offset, "%d,%s,%s", id, cmdName[], Str2Send[])
+   else
+      swrite(StrOut[], state, offset, "%s,%s", cmdName[], Str2Send[])
+   endif
+   
+   if debugFlag then
+      msgNotify(StrOut[])
+   endif
+   ret = eki_send(ekiConfigFile[], StrOut[])
+   return ret
+endfct
+
+global deffct eki_status sendRealArray(ekiConfigFile[]:OUT, id:in, cmdName[]:out, array:out, dim:in)
+   char ekiConfigFile[], cmdName[]
+   real array[]
+   int id, dim
+   char StrOut[300]
+   char StrTemp[100]
+   int sum, i
+   decl eki_status ret
+   bool bRet
+   
+   offset = 0
+   if useCommandId then
+      swrite(StrOut[], state, offset, "%d,%s", id, cmdName[])
+   else
+      swrite(StrOut[], state, offset, "%s", cmdName[])
+   endif
+   
+   for i = 1 to dim
+      bRet = strclear(StrTemp[])
+      offset = 0     
+      swrite(StrTemp[], state, offset, ",%1.4f", array[i])
+      sum = StrAdd(StrOut[], StrTemp[])     
+   endfor
+   if debugFlag then
+      msgNotify(StrOut[])
+   endif
+   ret = eki_send(ekiConfigFile[], StrOut[])
+   return ret
+endfct
+
+global deffct eki_status sendIntegerArray(ekiConfigFile[]:OUT, id:in, cmdName[]:out, array:out, dim:in)
+   char ekiConfigFile[], cmdName[]
+   int array[]
+   int id, dim
+   char StrOut[300]
+   char StrTemp[100]
+   int sum, i
+   decl eki_status ret
+   bool bRet
+   
+   offset = 0
+   if useCommandId then
+      swrite(StrOut[], state, offset, "%d,%s", id, cmdName[])
+   else
+      swrite(StrOut[], state, offset, "%s", cmdName[])
+   endif
+   
+   for i = 1 to dim
+      bRet = strclear(StrTemp[])
+      offset = 0     
+      swrite(StrTemp[], state, offset, ",%d", array[i])
+      sum = StrAdd(StrOut[], StrTemp[])     
+   endfor
+   if debugFlag then
+      msgNotify(StrOut[])
+   endif
+   ret = eki_send(ekiConfigFile[], StrOut[])
+   return ret
+endfct
+
+global deffct eki_status SendPose(ekiConfigFile[]:OUT, id:in, cmdName[]:out, PoseVal:IN)
+   char ekiConfigFile[], cmdName[]
+   e6pos PoseVal
+   int id
+   char StrOut[300]
+   char StrTemp[100]
+   int sum
+   decl eki_status ret
+   
+   offset = 0
+   if useCommandId then
+      swrite(StrOut[], state, offset, "%d,%s,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,%d,%d", id, cmdName[], PoseVal.X, PoseVal.Y, PoseVal.Z, PoseVal.A, PoseVal.B, PoseVal.C, PoseVal.S, PoseVal.T)
+   else
+      swrite(StrOut[], state, offset, "%s,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,%d,%d", cmdName[], PoseVal.X, PoseVal.Y, PoseVal.Z, PoseVal.A, PoseVal.B, PoseVal.C, PoseVal.S, PoseVal.T)
+   endif
+   
+   offset = 0
+   swrite(StrTemp[], state, offset, ",%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f", PoseVal.E1, PoseVal.E2, PoseVal.E3, PoseVal.E4, PoseVal.E5, PoseVal.E6)
+   
+   sum = StrAdd(StrOut[], StrTemp[])
+   
+   if debugFlag then
+      msgNotify(StrOut[])
+   endif
+   ret = eki_send(ekiConfigFile[], StrOut[])
+   return ret
+endfct
+
+global deffct eki_status SendAxis(ekiConfigFile[]:OUT, id:in, cmdName[]:out, AxisVal:IN)
+   char ekiConfigFile[], cmdName[]
+   e6axis AxisVal
+   int id
+   char StrOut[300]
+   char StrTemp[100]
+   int sum
+   decl eki_status ret
+   
+   offset = 0
+   if useCommandId then
+      swrite(StrOut[], state, offset, "%d,%s,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f", id, cmdName[], AxisVal.A1, AxisVal.A2, AxisVal.A3, AxisVal.A4, AxisVal.A5, AxisVal.A6, AxisVal.E1)
+   else
+      swrite(StrOut[], state, offset, "%s,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f", cmdName[], AxisVal.A1, AxisVal.A2, AxisVal.A3, AxisVal.A4, AxisVal.A5, AxisVal.A6, AxisVal.E1)
+   endif
+   
+   offset = 0
+   swrite(StrTemp[], state, offset, ",%1.4f,%1.4f,%1.4f,%1.4f,%1.4f", AxisVal.E2, AxisVal.E3, AxisVal.E4, AxisVal.E5, AxisVal.E6)
+   
+   sum = StrAdd(StrOut[], StrTemp[])
+   
+   if debugFlag then
+      msgNotify(StrOut[])
+   endif
+   ret = eki_send(ekiConfigFile[], StrOut[])
+   return ret
+endfct
+
+global deffct eki_status SendFrame(ekiConfigFile[]:OUT, id:in, cmdName[]:out, FrameData:IN)
+   char ekiConfigFile[], cmdName[]
+   frame FrameData
+   int id
+   char StrOut[1000]
+   decl eki_status ret
+   
+   offset = 0
+   if useCommandId then
+      swrite(StrOut[], state, offset, "%d,%s,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f", id, cmdName[], FrameData.X, FrameData.Y, FrameData.Z, FrameData.A, FrameData.B, FrameData.C)
+   else
+      swrite(StrOut[], state, offset, "%s,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f", cmdName[], FrameData.X, FrameData.Y, FrameData.Z, FrameData.A, FrameData.B, FrameData.C)
+   endif
+   if debugFlag then
+      msgNotify(StrOut[])
+   endif
+   ret = eki_send(ekiConfigFile[], StrOut[])
+   return ret
+endfct
+
+global deffct eki_status SendInt(ekiConfigFile[]:OUT, id:in, cmdName[]:out, VarValue:IN)
+   char ekiConfigFile[], cmdName[]
+   int VarValue
+   int id
+   char StrOut[1000]
+   decl eki_status ret
+   
+   offset = 0
+   if useCommandId then
+      swrite(StrOut[], state, offset, "%d,%s,%d", id, cmdName[], VarValue)
+   else
+      swrite(StrOut[], state, offset, "%s,%d", cmdName[], VarValue)
+   endif
+   
+   if debugFlag then
+      msgNotify(StrOut[])
+   endif
+   ret = eki_send(ekiConfigFile[], StrOut[])
+   return ret
+endfct
+
+global deffct eki_status SendReal(ekiConfigFile[]:OUT, id:in, cmdName[]:out, VarValue:IN)
+   char ekiConfigFile[], cmdName[]
+   real VarValue
+   int id
+   char StrOut[1000]
+   decl eki_status ret
+   
+   offset = 0
+   if useCommandId then
+      swrite(StrOut[], state, offset, "%d,%s,%1.4f", id, cmdName[], VarValue)
+   else
+      swrite(StrOut[], state, offset, "%s,%1.4f", cmdName[], VarValue)
+   endif
+   if debugFlag then
+      msgNotify(StrOut[])
+   endif
+   ret = eki_send(ekiConfigFile[], StrOut[])
+   return ret
+endfct
+
+
+global deffct eki_status sendMaxJointSpeed(ekiConfigFile[]:OUT, id:in, cmdName[]:out)
+   char ekiConfigFile[], cmdName[]
+   int id
+   decl eki_status ret
+   real jointSpeed[12]
+   int i   
+   computeMaxJointSpeed(jointSpeed[], 12)   
+   ret = sendRealArray(ekiConfigFile[], id, cmdName[], jointSpeed[], 12)
+   return ret
+endfct
+
+global def extractGearRatios(gearRatios[] : out, dim : in)
+   real gearRatios[]
+   int dim, i
+   real numer, denom, gr
+   
+   for i = 1 to dim
+      numer = abs($rat_mot_ax[i].n)
+      denom = abs($rat_mot_ax[i].d)   
+      gr = numer / denom   
+      gearRatios[i] = numer / denom
+      
+   endfor
+end
+
+global def computeMaxJointSpeed(jointSpeed[] : out, dim : in)
+   real jointSpeed[]
+   int dim, i
+   real pi, gr, numer, denom
+   
+   pi = 3.14159265
+   
+   for i = 1 to dim
+      if ($rat_mot_ax[i].n == 0) then
+         jointSpeed[i] = 0.0
+      else
+         numer = abs($rat_mot_ax[i].n)
+         denom = abs($rat_mot_ax[i].d)   
+         gr = numer / denom   
+         jointSpeed[i] = $vel_axis_ma[i] * pi / 30.0 / gr
+      endif
+   endfor
+end
+
+global def computeMaxJointAccel(jointAccel[] : out, dim : in)
+   real jointAccel[]
+   real jointSpeed[12]
+   int dim, i
+   
+   computeMaxJointSpeed(jointSpeed[], dim)
+   
+   for i = 1 to dim
+      if ($raise_time[i] == 0) then    
+         jointAccel[i] = 0.0
+      else 
+         jointAccel[i] = jointSpeed[i] / ($raise_time[i] / 1000.0)
+      endif
+   endfor
+end
+
+global deffct eki_status sendProgramInfo(ekiConfigFile[]:OUT, id:in, cmdName[]:out)
+   char ekiConfigFile[], cmdName[]
+   int id
+   char StrOut[2000], progState[10], progName[30]
+   decl eki_status ret
+   
+   ;fold get program state
+      switch $pro_state1
+         case #p_free
+            progState[] = "Free"
+         case #p_reset
+            progState[] = "Reset"
+         case #p_active
+            progState[] = "Running"
+         case #p_stop
+            progState[] = "Stopped"
+         case #p_end
+            progState[] = "Ended"
+         default
+            progState[] = "Unknown" ; should not happen
+      endswitch
+   ;endfold
+   
+   if strLen($pro_name1[]) > 1 then
+      progName[] = $pro_name1[]
+   else
+      progName[] = "None"
+   endif      
+   
+   offset = 0
+   if useCommandId then
+      swrite(StrOut[], state, offset, "%d,%s,%s,%s", id, cmdName[], progName[], progState[])
+   else
+      swrite(StrOut[], state, offset, "%s,%s,%s", cmdName[], progName[], progState[])
+   endif
+   
+   if debugFlag then
+      msgNotify(StrOut[])
+   endif
+   ret = eki_send(ekiConfigFile[], StrOut[])
+   return ret
+endfct
+
+global deffct eki_status sendProgRunMode(ekiConfigFile[]:OUT, id:in, cmdName[]:out)
+   char ekiConfigFile[], cmdName[]
+   int id
+   char StrOut[2000], runMode[30]
+   decl eki_status ret
+   
+   switch $pro_mode
+      case #GO
+         runMode[] = "GO"
+      case #MSTEP
+         runMode[] = "MotionStep"
+      case #ISTEP
+         runMode[] = "IncrementalStep"
+      case #BSTEP
+         runMode[] = "BackwardStep"
+      case #PSTEP
+         runMode[] = "ProgramStep"
+      case #CSTEP
+         runMode[] = "ContinuousStep"
+      default
+         runMode[] = "Unknown" ; should not happen
+   endswitch
+   
+   offset = 0
+   if useCommandId then
+      swrite(StrOut[], state, offset, "%d,%s,%s", id, cmdName[], runMode[])
+   else
+      swrite(StrOut[], state, offset, "%s,%s", cmdName[], runMode[])
+   endif
+   
+   if debugFlag then
+      msgNotify(StrOut[])
+   endif
+   ret = eki_send(ekiConfigFile[], StrOut[])
+   return ret
+endfct
+
+global deffct eki_status sendOperatingMode(ekiConfigFile[]:OUT, id:in, cmdName[]:out)
+   char ekiConfigFile[], cmdName[]
+   int id
+   char StrOut[2000], opMode[10] 
+   decl eki_status ret
+   
+   switch $mode_op
+      case #AUT
+         opMode[] = "Auto"
+      case #EX
+         opMode[] = "Extern"
+      case #T1
+         opMode[] = "T1"
+      case #T2
+         opMode[] = "T2"
+      default
+         opMode[] = "Unknown" ; should not happen
+   endswitch
+   
+   offset = 0
+   if useCommandId then
+      swrite(StrOut[], state, offset, "%d,%s,%s", id, cmdName[], opMode[])
+   else
+      swrite(StrOut[], state, offset, "%s,%s", cmdName[], opMode[])
+   endif
+   
+   if debugFlag then
+      msgNotify(StrOut[])
+   endif
+   ret = eki_send(ekiConfigFile[], StrOut[])
+   return ret
+endfct
+
+global deffct eki_status sendMadaDh(ekiConfigFile[]:OUT, id:in, cmdName[]:out)
+   char ekiConfigFile[], cmdName[]
+   int id
+   char StrOut[2000]
+   decl eki_status ret
+   
+   offset = 0
+   if useCommandId then
+      swrite(StrOut[], state, offset, "%d,%s,%1.2f,%1.2f,%1.2f,%1.2f,%1.2f,%1.2f", id, cmdName[], $tiroro.z, $length_A, $length_B, $tx3p3.z, $tx3p3.x, $tflwp.z)
+   else
+      swrite(StrOut[], state, offset, "%s,%1.2f,%1.2f,%1.2f,%1.2f,%1.2f,%1.2f", cmdName[], $tiroro.z, $length_A, $length_B, $tx3p3.z, $tx3p3.x, $tflwp.z)
+   endif
+   
+   if debugFlag then
+      msgNotify(StrOut[])
+   endif
+   ret = eki_send(ekiConfigFile[], StrOut[])
+   return ret
+endfct
+
+global deffct eki_status sendLoadData(ekiConfigFile[]:OUT, id:in, cmdName[]:out)
+   char ekiConfigFile[], cmdName[]
+   int id
+   char StrTemp[100], strOut[300]
+   int sum
+   decl eki_status ret
+   
+   offset = 0   
+   if useCommandId then
+      swrite(strOut[], state, offset, "%d,%s,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,", id, cmdName[], $LOAD.m, $LOAD.cm.x, $LOAD.cm.y, $LOAD.cm.z, $LOAD.cm.a, $LOAD.cm.b, $LOAD.cm.c)
+   else
+      swrite(strOut[], state, offset, "%s,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,", cmdName[], $LOAD.m, $LOAD.cm.x, $LOAD.cm.y, $LOAD.cm.z, $LOAD.cm.a, $LOAD.cm.b, $LOAD.cm.c)
+   endif
+   
+   offset = 0
+   swrite(StrTemp[], state, offset, "%1.4f,%1.4f,%1.4f", $LOAD.j.x,$LOAD.j.y,$LOAD.j.x)
+   
+   sum = strAdd(strOut[], StrTemp[])
+   
+   if debugFlag then
+      msgNotify(StrOut[])
+   endif
+   ret = eki_send(ekiConfigFile[], StrOut[])
+   return ret
+endfct
+
+global def clearCommand(cmdData:out)
+   decl eki_data_type cmdData
+   bool ret
+   ret = strClear(cmdData.cmdName[])
+   cmdData.cmdId = -1 ;
+   cmdData.jointVal.a1 = 0.0
+   cmdData.jointVal.a2 = 0.0
+   cmdData.jointVal.a3 = 0.0
+   cmdData.jointVal.a4 = 0.0
+   cmdData.jointVal.a5 = 0.0
+   cmdData.jointVal.a6 = 0.0
+   cmdData.jointVal.e1 = 0.0
+   cmdData.jointVal.e2 = 0.0
+   cmdData.jointVal.e3 = 0.0
+   cmdData.jointVal.e4 = 0.0
+   cmdData.jointVal.e5 = 0.0
+   cmdData.jointVal.e6 = 0.0
+   cmdData.cartVal = $nullframe
+   cmdData.integerVal = -1
+   cmdData.realVal = -1
+   ret = strClear(cmdData.stringInput[]) 
+end
+
+global def array2Axis(arrayIn[]:OUT, axisOut:OUT, dim:IN)
+   real arrayIn[]
+   e6axis axisOut
+   int dim, i
+   
+   i = 1 
+   axisOut.A1 = arrayIn[i]
+   if i >= dim then
+      return
+   endif
+   i = i+1
+   
+   axisOut.A2 = arrayIn[i]
+   if i >= dim then
+      return
+   endif
+   i = i+1
+   
+   axisOut.A3 = arrayIn[i]
+   if i >= dim then
+      return
+   endif
+   i = i+1
+   
+   axisOut.A4 = arrayIn[i]
+   if i >= dim then
+      return
+   endif
+   i = i+1
+   
+   axisOut.A5 = arrayIn[i]
+   if i >= dim then
+      return
+   endif
+   i = i+1
+   
+   axisOut.A6 = arrayIn[i]
+   if i >= dim then
+      return
+   endif
+   i = i+1
+   
+   axisOut.E1 = arrayIn[i]
+   if i >= dim then
+      return
+   endif
+   i = i+1
+   
+   axisOut.E2 = arrayIn[i]
+   if i >= dim then
+      return
+   endif
+   i = i+1
+   
+   axisOut.E3 = arrayIn[i]
+   if i >= dim then
+      return
+   endif
+   i = i+1
+   
+   axisOut.E4 = arrayIn[i]
+   if i >= dim then
+      return
+   endif
+   i = i+1
+   
+   axisOut.E5 = arrayIn[i]
+   if i >= dim then
+      return
+   endif
+   i = i+1
+   
+   axisOut.E6 = arrayIn[i]
+end
+
+def axis2String(axisVal:in, StrOut[]:out)
+   e6axis axisVal
+   char StrOut[]
+   char StrTemp[100]
+   bool ret
+   int sum
+   ret = strClear(StrOut[])
+   offset = 0
+   swrite(StrOut[], state, offset, "%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f,%1.4f", AxisVal.A1, AxisVal.A2, AxisVal.A3, AxisVal.A4, AxisVal.A5, AxisVal.A6, AxisVal.E1)
+   
+   offset = 0
+   swrite(StrTemp[], state, offset, ",%1.4f,%1.4f,%1.4f,%1.4f,%1.4f", AxisVal.E2, AxisVal.E3, AxisVal.E4, AxisVal.E5, AxisVal.E6)
+   
+   sum = StrAdd(StrOut[], StrTemp[])
+end
