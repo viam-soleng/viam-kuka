@@ -30,7 +30,6 @@ const (
 )
 
 var (
-	errUnimplemented      = errors.New("unimplemented")
 	Model                 = resource.NewModel("sol-eng", "arm", "kuka")
 	supportedKukaKRModels = []string{"KR5_ACR"}
 
@@ -289,9 +288,18 @@ func (kuka *kukaArm) IsMoving(context.Context) (bool, error) {
 	return kuka.getCurrentStateSafe().isMoving, nil
 }
 
-// Stop TBD
+// Stop stops and ongoing actions
 func (kuka *kukaArm) Stop(ctx context.Context, extra map[string]interface{}) error {
-	return errUnimplemented
+	if err := kuka.sendCommand(ekiCommand.SetStop, ""); err != nil {
+		return err
+	}
+
+	// Get joint and eng effector position after stop action has occurred
+	kuka.updateState()
+	if err := kuka.updateState(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // DoCommand can be implemented to extend functionality but returns unimplemented currently.
@@ -301,14 +309,8 @@ func (kuka *kukaArm) DoCommand(ctx context.Context, cmd map[string]interface{}) 
 		return nil, errors.Errorf("error, request value (%v) was not a string", cmd["cmd"])
 	}
 
-	if command == "settestjointposition1" {
-		kuka.MoveToJointPositions(ctx, &pb.JointPositions{Values: []float64{0, -50, 120, 0, 0, 0}}, nil)
-	} else if command == "settestjointposition2" {
-		kuka.MoveToJointPositions(ctx, &pb.JointPositions{Values: []float64{0, -90, 90, 0, 0, 0}}, nil)
-	} else {
-		if err := kuka.Write([]byte(command)); err != nil {
-			return nil, err
-		}
+	if err := kuka.Write([]byte(command)); err != nil {
+		return nil, err
 	}
 
 	return nil, nil

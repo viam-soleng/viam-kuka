@@ -1,6 +1,7 @@
 package kuka
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -29,6 +30,7 @@ func (kuka *kukaArm) startResponseMonitor() error {
 func (kuka *kukaArm) responseMonitor() {
 	for {
 		if kuka.closed {
+			fmt.Println("closed")
 			break
 		}
 
@@ -53,6 +55,7 @@ func (kuka *kukaArm) handleRobotResponses(command string, args []string) {
 	// Check for success status
 	if len(args) > 0 {
 		if args[0] == "success" {
+			kuka.responseCh <- true
 			kuka.stateMutex.Lock()
 			kuka.currentState.isMoving = false
 			kuka.stateMutex.Unlock()
@@ -219,8 +222,6 @@ func (kuka *kukaArm) handleGetJointPositions(data []string) {
 	kuka.stateMutex.Lock()
 	defer kuka.stateMutex.Unlock()
 	kuka.currentState.joints = jointList
-
-	kuka.responseCh <- true
 }
 
 func (kuka *kukaArm) handleGetEndPositions(data []string) {
@@ -266,7 +267,7 @@ func (kuka *kukaArm) handleProgramState(data []string) {
 	kuka.currentState.programName = data[0]
 	kuka.currentState.programState = ekiCommand.StringToProgramStatus(data[1])
 
-	kuka.responseCh <- true
+	kuka.responseCh <- false
 }
 
 // Set

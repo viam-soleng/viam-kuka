@@ -17,7 +17,7 @@ import "github.com/pkg/errors"
 */
 
 var (
-	// Getters
+	// Info Commands
 	GetRobotName            string = "getrobotname"       // Response: <robot_name>
 	GetRobotSoftwareVersion string = "getsoftwareversion" // Response: <sw_version>
 	GetRobotSerialNum       string = "getrobotserialnum"  // Response: <robot_serial_number>
@@ -29,9 +29,9 @@ var (
 	GetEndPosition          string = "getcurrentpos"      // Response: <x,y,z,a,b,c,status,turn,e1,e2,e3,e4,e5,e6>
 	GetJointPosition        string = "getcurrentjoints"   // Response: <a1,a2,a3,a4,a5,a6,e1,e2,e3,e4,e5,e6>
 
-	// Setters
+	// Motion Commands
 	SetJointPosition string = "ptptojointpos" // Request: <a1,a2,a3,a4,a5,a6,e1,e2,e3,e4,e5,e6>, Response: <status>
-
+	SetStop          string = "setstop"       // Response: success
 )
 
 type ProgramStatus int64

@@ -1,7 +1,0 @@
-&ACCESS  R
-&COMMENT Message library
-DEFDAT  MsgLib PUBLIC
-
-DECL INT lnHandle=0
-
-ENDDAT 
