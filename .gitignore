@@ -6,3 +6,5 @@ bin/
 module.tar.gz
 
 coverage.txt
+
+.vscode
