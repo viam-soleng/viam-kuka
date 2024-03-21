@@ -55,8 +55,12 @@ func (kuka *kukaArm) handleRobotResponses(command string, args []string) {
 	// Check for success status
 	if len(args) > 0 {
 		if args[0] == "success" {
-			kuka.responseCh <- true
 			kuka.stateMutex.Lock()
+			// Send response to channel if a move request is being processed
+			if kuka.currentState.isMoving {
+				kuka.responseCh <- true
+			}
+
 			kuka.currentState.isMoving = false
 			kuka.stateMutex.Unlock()
 			return
