@@ -36,4 +36,4 @@ Support for the following Arms has been confirmed. Additional arms that operate 
 
 | Devices             | Mac OSX |  Linux  |
 |---------------------|---------|---------|
-| KR5 ACR             |    X    |    X    | 
+| KR10r900 ACR        |    X    |    X    | 

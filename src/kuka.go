@@ -26,13 +26,13 @@ const (
 
 	defaultTCPPort   int    = 54610
 	defaultIPAddress string = "10.1.4.212"
-	defaultModel     string = "KR5_ACR"
+	defaultModel     string = "KR10r900"
 )
 
 var (
 	errUnimplemented      = errors.New("unimplemented")
 	Model                 = resource.NewModel("sol-eng", "arm", "kuka")
-	supportedKukaKRModels = []string{"KR5_ACR"}
+	supportedKukaKRModels = []string{"KR10r900"}
 
 	motionTimeout time.Duration = 30 * time.Second
 )

@@ -23,7 +23,7 @@ func TestGetterEndpoints(t *testing.T) {
 	expectedPose := spatialmath.NewPoseFromPoint(r3.Vector{X: 1, Y: 2, Z: 3})
 	expectedJoints := []float64{0, 1, 2, 3, 4, 5}
 
-	urdfModel, err := urdf.ParseModelXMLFile(resolveFile("src/models/KR5_ACR_model.urdf"), "test")
+	urdfModel, err := urdf.ParseModelXMLFile(resolveFile("src/models/kr10r900_2.urdf"), "test")
 	test.That(t, err, test.ShouldBeNil)
 
 	kuka := &kukaArm{
