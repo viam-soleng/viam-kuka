@@ -32,7 +32,7 @@ const (
 var (
 	errUnimplemented      = errors.New("unimplemented")
 	Model                 = resource.NewModel("sol-eng", "arm", "kuka")
-	supportedKukaKRModels = []string{"KR10r900"}
+	supportedKukaKRModels = []string{defaultModel}
 
 	motionTimeout time.Duration = 30 * time.Second
 )
