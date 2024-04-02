@@ -2,6 +2,7 @@ package kuka
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -23,7 +24,7 @@ func TestGetterEndpoints(t *testing.T) {
 	expectedPose := spatialmath.NewPoseFromPoint(r3.Vector{X: 1, Y: 2, Z: 3})
 	expectedJoints := []float64{0, 1, 2, 3, 4, 5}
 
-	urdfModel, err := urdf.ParseModelXMLFile(resolveFile("src/models/kr10r900_2.urdf"), "test")
+	urdfModel, err := urdf.ParseModelXMLFile(resolveFile(fmt.Sprintf("src/models/%v.urdf", kr10r900)), "test")
 	test.That(t, err, test.ShouldBeNil)
 
 	kuka := &kukaArm{
