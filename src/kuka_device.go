@@ -55,6 +55,7 @@ func (kuka *kukaArm) Disconnect() error {
 func (kuka *kukaArm) Write(command []byte) error {
 	kuka.tcpConn.mu.Lock()
 	defer kuka.tcpConn.mu.Unlock()
+
 	kuka.logger.Debugf("Sending command: %v", string(command))
 	if _, err := kuka.tcpConn.conn.Write(command); err != nil {
 		return err
