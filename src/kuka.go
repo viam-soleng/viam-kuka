@@ -26,15 +26,20 @@ const (
 
 	defaultTCPPort   int    = 54610
 	defaultIPAddress string = "10.1.4.212"
-	defaultModel     string = "KR5_ACR"
 )
 
 var (
-	Model                 = resource.NewModel("sol-eng", "arm", "kuka")
-	supportedKukaKRModels = []string{"KR5_ACR"}
-
-	motionTimeout time.Duration = 30 * time.Second
+	errUnimplemented               = errors.New("unimplemented")
+	Model                          = resource.NewModel("sol-eng", "arm", "kuka")
+	motionTimeout    time.Duration = 30 * time.Second
 )
+
+// the set of supported armModels
+const (
+	kr10r900 = "KR10r900"
+)
+
+var supportedKukaKRModels = []string{kr10r900}
 
 type Config struct {
 	IPAddress string `json:"ip_address,omitempty"`

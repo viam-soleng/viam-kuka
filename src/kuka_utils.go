@@ -68,30 +68,23 @@ func (kuka *kukaArm) parseConfig(newConf *Config) error {
 		kuka.tcpConn.port = defaultTCPPort
 	}
 
-	var model string
-	if newConf.Model != "" {
-		model = newConf.Model
-	} else {
-		kuka.logger.Warnf("No model given, attempting to connect to default model: %v", defaultModel)
-		model = defaultModel
-	}
-
-	var foundModel bool
-	for _, supportedModel := range supportedKukaKRModels {
-		if model == supportedModel {
-			foundModel = true
-
-			urdfModel, err := urdf.ParseModelXMLFile(resolveFile(fmt.Sprintf("src/models/%v_model.urdf", model)), kuka.Name().ShortName())
-			if err != nil {
-				return err
-			}
-
-			kuka.logger.Infof("loading URDF model: %v", fmt.Sprintf("src/models/%v_model.urdf", model))
-			kuka.model = urdfModel
+	switch newConf.Model {
+	case kr10r900, "": // use the kr10r900 as the default value
+		urdfModel, err := urdf.ParseModelXMLFile(
+			resolveFile(fmt.Sprintf("src/models/%v_model.urdf", newConf.Model)),
+			kuka.Name().ShortName(),
+		)
+		if err != nil {
+			return err
 		}
-	}
-	if !foundModel {
-		return errors.Errorf("given model (%v) not in list of supported models (%v), no URDF files are available for desired model", model, supportedKukaKRModels)
+
+		kuka.logger.Infof("loading URDF model: %v", fmt.Sprintf("src/models/%v_model.urdf", newConf.Model))
+		kuka.model = urdfModel
+	default:
+		return errors.Errorf("given model (%v) not in list of supported models (%v), no URDF files are available for desired model",
+			newConf.Model,
+			supportedKukaKRModels,
+		)
 	}
 
 	kuka.safeMode = newConf.SafeMode
