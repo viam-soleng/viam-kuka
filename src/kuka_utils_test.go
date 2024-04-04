@@ -37,11 +37,6 @@ func TestParseConfig(t *testing.T) {
 		err := kuka.parseConfig(cfg)
 		test.That(t, err, test.ShouldBeNil)
 		test.That(t, kuka.tcpConn.ipAddress, test.ShouldEqual, cfg.IPAddress)
-
-		cfg = &Config{}
-		err = kuka.parseConfig(cfg)
-		test.That(t, err, test.ShouldBeNil)
-		test.That(t, kuka.tcpConn.ipAddress, test.ShouldEqual, defaultIPAddress)
 	})
 
 	t.Run("Port", func(t *testing.T) {

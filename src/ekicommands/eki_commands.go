@@ -29,6 +29,8 @@ var (
 	GetEndPosition          string = "getcurrentpos"      // Response: <x,y,z,a,b,c,status,turn,e1,e2,e3,e4,e5,e6>
 	GetJointPosition        string = "getcurrentjoints"   // Response: <a1,a2,a3,a4,a5,a6,e1,e2,e3,e4,e5,e6>
 
+	SetJointSpeed string = "setjointspeed" // Response: success
+
 	// Motion Commands
 	SetJointPosition string = "ptptojointpos" // Request: <a1,a2,a3,a4,a5,a6,e1,e2,e3,e4,e5,e6>, Response: <status>
 	SetStop          string = "setstop"       // Response: success

@@ -24,14 +24,14 @@ const (
 	numJoints         int = 6
 	numExternalJoints int = 6
 
-	defaultTCPPort   int    = 54610
-	defaultIPAddress string = "10.1.4.212"
+	defaultTCPPort int = 54610
+
+	defaultJointSpeed float64 = 2.5
 )
 
 var (
-	errUnimplemented               = errors.New("unimplemented")
-	Model                          = resource.NewModel("sol-eng", "arm", "kuka")
-	motionTimeout    time.Duration = 30 * time.Second
+	Model                       = resource.NewModel("sol-eng", "arm", "kuka")
+	motionTimeout time.Duration = 30 * time.Second
 )
 
 // the set of supported armModels
@@ -42,7 +42,7 @@ const (
 var supportedKukaKRModels = []string{kr10r900}
 
 type Config struct {
-	IPAddress string `json:"ip_address,omitempty"`
+	IPAddress string `json:"ip_address"`
 	Port      int    `json:"port,omitempty"`
 	Model     string `json:"model,omitempty"`
 	SafeMode  bool   `json:"safe_mode,omitempty"`
@@ -102,6 +102,10 @@ func init() {
 }
 
 func (cfg *Config) Validate(path string) ([]string, error) {
+	if cfg.IPAddress == "" {
+		return nil, resource.NewConfigValidationFieldRequiredError(path, "ip_address")
+	}
+
 	return nil, nil
 }
 
@@ -159,6 +163,11 @@ func (kuka *kukaArm) Reconfigure(ctx context.Context, deps resource.Dependencies
 	}
 
 	kuka.logger.Debugf("Device Info: %v", kuka.deviceInfo)
+
+	// Set initial values
+	if err := kuka.setInitialValues(); err != nil {
+		return err
+	}
 
 	// Check program state
 	programState, err := kuka.checkEKIProgramState(ctx)

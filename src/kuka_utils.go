@@ -54,12 +54,7 @@ func (kuka *kukaArm) parseConfig(newConf *Config) error {
 	kuka.stateMutex.Lock()
 	defer kuka.stateMutex.Unlock()
 
-	if newConf.IPAddress != "" {
-		kuka.tcpConn.ipAddress = newConf.IPAddress
-	} else {
-		kuka.logger.Warnf("No ip address given, attempting to connect via default ip %v", defaultIPAddress)
-		kuka.tcpConn.ipAddress = defaultIPAddress
-	}
+	kuka.tcpConn.ipAddress = newConf.IPAddress
 
 	if newConf.Port != 0 {
 		kuka.tcpConn.port = newConf.Port
@@ -70,8 +65,9 @@ func (kuka *kukaArm) parseConfig(newConf *Config) error {
 
 	switch newConf.Model {
 	case kr10r900, "": // use the kr10r900 as the default value
+		model := kr10r900
 		urdfModel, err := urdf.ParseModelXMLFile(
-			resolveFile(fmt.Sprintf("src/models/%v_model.urdf", newConf.Model)),
+			resolveFile(fmt.Sprintf("src/models/%v_model.urdf", model)),
 			kuka.Name().ShortName(),
 		)
 		if err != nil {
@@ -127,6 +123,18 @@ func (kuka *kukaArm) getDeviceInfo() error {
 
 	// Update current state of kuka device
 	if err := kuka.updateState(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// getDeviceInfo will send a series of commands to the device to gather information from robot name and model to limits on joint movement
+// and starting positions.
+func (kuka *kukaArm) setInitialValues() error {
+
+	// Set joint speed
+	if err := kuka.sendCommand(ekiCommand.SetJointSpeed, fmt.Sprintf("%v", defaultJointSpeed)); err != nil {
 		return err
 	}
 
