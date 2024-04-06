@@ -74,7 +74,7 @@ func (kuka *kukaArm) parseConfig(newConf *Config) error {
 			return err
 		}
 
-		kuka.logger.Infof("loading URDF model: %v", fmt.Sprintf("src/models/%v_model.urdf", newConf.Model))
+		kuka.logger.Infof("loading URDF model: %v", fmt.Sprintf("src/models/%v_model.urdf", model))
 		kuka.model = urdfModel
 	default:
 		return errors.Errorf("given model (%v) not in list of supported models (%v), no URDF files are available for desired model",
