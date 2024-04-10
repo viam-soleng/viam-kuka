@@ -39,3 +39,7 @@ Support for the following Arms has been confirmed. Additional arms that operate 
 | Devices             | Mac OSX |  Linux  |
 |---------------------|---------|---------|
 | KR10r900-2          |    X    |    X    | 
+
+## Further Work
+
+To request additional features or models be added, please create a GitHub Issue or reach out to us on our [Discord channel](https://discord.com/channels/1083489952408539288). 
