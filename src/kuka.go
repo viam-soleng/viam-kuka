@@ -26,7 +26,7 @@ const (
 
 	defaultTCPPort int = 54610
 
-	defaultJointSpeed float64 = 2.5
+	defaultJointSpeed float64 = 6.28
 )
 
 var (
