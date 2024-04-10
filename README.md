@@ -25,10 +25,11 @@ The following attributes are available:
 
 | Name | Type | Inclusion | Description |
 | ---- | ---- | --------- | ----------- |
-| `ip_address` | string | Optional | The IP address of the KUKA device.  |
+| `ip_address` | string | Required | The IP address of the KUKA device.  |
 | `port` | int | Optional | The port on the device to form the required TCP connection. The default port is 54610.  |
-| `model` | string | Optional | The baudrate model of KUKA device to be communicated to. This is also used in order to load the proper URDF file for geometric and kinematic data.  |
-| `safe_mode` | bool | Optional | A bool that, if true, will ping the KUKA device to check connection before running any motion actions. |
+| `model` | string | Optional | The baudrate model of KUKA device to be communicated to. This is also used in order to load the proper URDF file for geometric and kinematic data. The default model is KR10 R900-2.  |
+| `joint_speed` | float64 | Optional | Sets the speed of the joints. A value from (1-100). The default speed is 6.28  |
+| `safe_mode` | bool | Optional | A bool that, if true, will ping the KUKA device to check connection before running any motion actions. The default is safe_mode turned off. |
 
 ## Known Supported Hardware
 

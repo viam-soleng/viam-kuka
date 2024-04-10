@@ -42,10 +42,11 @@ const (
 var supportedKukaKRModels = []string{kr10r900}
 
 type Config struct {
-	IPAddress string `json:"ip_address"`
-	Port      int    `json:"port,omitempty"`
-	Model     string `json:"model,omitempty"`
-	SafeMode  bool   `json:"safe_mode,omitempty"`
+	IPAddress  string  `json:"ip_address"`
+	Port       int     `json:"port,omitempty"`
+	Model      string  `json:"model,omitempty"`
+	SafeMode   bool    `json:"safe_mode,omitempty"`
+	JointSpeed float64 `json:"joint_speed,omitempty"`
 }
 
 type state struct {
@@ -54,6 +55,8 @@ type state struct {
 	jointLimits     []referenceframe.Limit
 
 	isMoving bool
+
+	jointSpeed float64
 
 	programState ekiCommand.ProgramStatus
 	programName  string

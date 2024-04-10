@@ -63,6 +63,13 @@ func (kuka *kukaArm) parseConfig(newConf *Config) error {
 		kuka.tcpConn.port = defaultTCPPort
 	}
 
+	if newConf.JointSpeed != 0 {
+		kuka.currentState.jointSpeed = newConf.JointSpeed
+	} else {
+		kuka.logger.Warnf("No joint speed specified, using default of %v", defaultJointSpeed)
+		kuka.currentState.jointSpeed = defaultJointSpeed
+	}
+
 	switch newConf.Model {
 	case kr10r900, "": // use the kr10r900 as the default value
 		model := kr10r900
@@ -132,9 +139,11 @@ func (kuka *kukaArm) getDeviceInfo() error {
 // getDeviceInfo will send a series of commands to the device to gather information from robot name and model to limits on joint movement
 // and starting positions.
 func (kuka *kukaArm) setInitialValues() error {
+	kuka.stateMutex.Lock()
+	defer kuka.stateMutex.Unlock()
 
 	// Set joint speed
-	if err := kuka.sendCommand(ekiCommand.SetJointSpeed, fmt.Sprintf("%v", defaultJointSpeed)); err != nil {
+	if err := kuka.sendCommand(ekiCommand.SetJointSpeed, fmt.Sprintf("%v", kuka.currentState.jointSpeed)); err != nil {
 		return err
 	}
 
