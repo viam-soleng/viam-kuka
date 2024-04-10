@@ -2,7 +2,7 @@
   "module_id": "viam-soleng:viam-kuka",
   "visibility": "public",
   "url": "https://github.com/viam-soleng/viam-kuka",
-  "description": "Go module for operating a Kuka Arm",
+  "description": "Viam module for Kuka Arm via TCP Client/Server and Kuka's EKI Manager",
   "models": [
     {
       "api": "rdk:component:arm",

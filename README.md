@@ -1,6 +1,6 @@
 # Viam KUKA Module
 
-This is a [Viam module](https://docs.viam.com/manage/configuration/#modules) for [KUKA](https://www.kuka.com/en-us)'s family of arms.
+This is a [Viam module](https://docs.viam.com/manage/configuration/#modules) for [KUKA](https://www.kuka.com/en-us)'s family of industrial arms. This module will create a TCP client connection to a Kuka controller running Kuka's EKI Manager software in their SmartHMI.
 
 
 ## Configure your KUKA Arm
@@ -10,10 +10,11 @@ After creating a new arm component resource and adding this module to your confi
 
 ```json
 {
-  "model": "S1",
   "ip_address": "0.0.0.0",
   "port": 1234,
-  "safe_mode": true
+  "model": "S1",
+  "safe_mode": true,
+  "joint_speed": 10
 }
 ```
 
@@ -33,8 +34,8 @@ The following attributes are available:
 
 ## Known Supported Hardware
 
-Support for the following Arms has been confirmed. Additional arms that operate via KUKA's Robot Language (KRL) should also be supported given the proper URDF file.
+Support for the following Arms has been confirmed. Additional arms that operate via KUKA's Robot Language (KRL) can be supported given the proper URDF file.
 
 | Devices             | Mac OSX |  Linux  |
 |---------------------|---------|---------|
-| KR10r900            |    X    |    X    | 
+| KR10r900-2          |    X    |    X    | 
