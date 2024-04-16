@@ -1,7 +1,10 @@
 # Viam KUKA Module
 
-This is a [Viam module](https://docs.viam.com/manage/configuration/#modules) for [KUKA](https://www.kuka.com/en-us)'s family of industrial arms. This module will create a TCP client connection to a Kuka controller running Kuka's EKI Manager software in their SmartHMI.
+This is a [Viam module](https://docs.viam.com/manage/configuration/#modules) for [KUKA](https://www.kuka.com/en-us)'s family of industrial arms. This module provides generalize framework for operating any compatible Kuka arm. This includes Kuka arm/controllers that utilize a TCP client connection and Kuka's EKI Manager.
 
+This viam-kuka module is particularly useful in applications that require a Kuka arm to be operated in conjunction with other resources (such as cameras, sensors, actuators, CV) offered by the [Viam Platform](https://www.viam.com/) and/or separate through your own code. 
+
+As an example, a recent demo was created utilizing a Kuka Arm, an [intelrealsense RGB-D camera](https://app.viam.com/module/viam/realsense), a [modbus](https://app.viam.com/module/viam-soleng/viam-modbus) connection to a PLC and [computer vision](https://docs.viam.com/ml/vision/) (YOLOv8) to create a mobile, face-tracking robot on the lookout for PPE equipment violators. 
 
 ## Configure your KUKA Arm
 
