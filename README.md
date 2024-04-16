@@ -1,7 +1,10 @@
 # Viam KUKA Module
 
-This is a [Viam module](https://docs.viam.com/manage/configuration/#modules) for [KUKA](https://www.kuka.com/en-us)'s family of arms.
+This is a [Viam module](https://docs.viam.com/manage/configuration/#modules) for [KUKA](https://www.kuka.com/en-us)'s family of industrial arms. This module provides generalize framework for operating any compatible Kuka arm. This includes Kuka arm/controllers that utilize a TCP client connection and Kuka's EKI Manager.
 
+This viam-kuka module is particularly useful in applications that require a Kuka arm to be operated in conjunction with other resources (such as cameras, sensors, actuators, CV) offered by the [Viam Platform](https://www.viam.com/) and/or separate through your own code. 
+
+As an example, a recent demo was created utilizing a Kuka Arm, an [intelrealsense RGB-D camera](https://app.viam.com/module/viam/realsense), a [modbus](https://app.viam.com/module/viam-soleng/viam-modbus) connection to a PLC and [computer vision](https://docs.viam.com/ml/vision/) (YOLOv8) to create a mobile, face-tracking robot on the lookout for PPE equipment violators. 
 
 ## Configure your KUKA Arm
 
@@ -10,10 +13,11 @@ After creating a new arm component resource and adding this module to your confi
 
 ```json
 {
-  "model": "S1",
   "ip_address": "0.0.0.0",
   "port": 1234,
-  "safe_mode": true
+  "model": "S1",
+  "safe_mode": true,
+  "joint_speed": 10
 }
 ```
 
@@ -33,8 +37,12 @@ The following attributes are available:
 
 ## Known Supported Hardware
 
-Support for the following Arms has been confirmed. Additional arms that operate via KUKA's Robot Language (KRL) should also be supported given the proper URDF file.
+Support for the following Arms has been confirmed. Additional arms that operate via KUKA's Robot Language (KRL) can be supported given the proper URDF file.
 
 | Devices             | Mac OSX |  Linux  |
 |---------------------|---------|---------|
-| KR10r900            |    X    |    X    | 
+| KR10r900-2          |    X    |    X    | 
+
+## Further Work
+
+To request additional features or models be added, please create a GitHub Issue or reach out to us on our [Discord channel](https://discord.com/channels/1083489952408539288). 
