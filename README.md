@@ -14,9 +14,9 @@ As an example, a recent demo was created utilizing a Kuka Arm, an [intelrealsens
 > [!NOTE]
 > Before configuring your Kuka Arm, you must [add a machine](https://docs.viam.com/fleet/machines/#add-a-new-machine).
 
-Navigate to the **CONFIGURE** tab of your machine’s page in [the Viam app](https://app.viam.com/). Click the **+** icon next to your machine part in the left-hand menu and select **Component**. Select the `arm` type, then search for and select the `arm / viam-kuka` model. Click **Add module**, then enter a name or use the suggested name for your base and click **Create**.
+Navigate to the **CONFIGURE** tab of your machine’s page in [the Viam app](https://app.viam.com/). Click the **+** icon next to your machine part in the left-hand menu and select **Component**. Select the `arm` type, then search for and select the `arm / viam-kuka` model. Click **Add module**, then enter a name or use the suggested name for your arm and click **Create**.
 
-On the new component panel, copy and paste the following attribute template into your base’s attributes field:
+On the new component panel, copy and paste the following attribute template into your arm’s attributes field:
 
 ```json
 {
