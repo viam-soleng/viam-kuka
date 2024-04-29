@@ -18,9 +18,6 @@ jobs:
           - arch: amd64
             runner: [ubuntu-latest]
             image: ghcr.io/viamrobotics/rdk-devenv:amd64-cache
-          - arch: arm64
-            runner: [macos-latest]
-            image: ghcr.io/viamrobotics/rdk-devenv:arm64-cache
     runs-on: ${{ matrix.runner }}
     container:
       image: ${{ matrix.image }}
