@@ -17,7 +17,7 @@ jobs:
         include:
           - arch: amd64
             runner: [ubuntu-latest]
-            image: ghcr.io/viamrobotics/rdk-devenv:amd64-cache
+            image: ghcr.io/viamrobotics/rdk-devenv:amd64
     runs-on: ${{ matrix.runner }}
     container:
       image: ${{ matrix.image }}
@@ -25,6 +25,10 @@ jobs:
       os: ${{contains(matrix.runner, 'ubuntu') && 'linux' || contains(matrix.runner, 'macos') && 'macos' || 'unknown'}}
       GOOS: ${{contains(matrix.runner, 'ubuntu') && 'linux' || contains(matrix.runner, 'macos') && 'darwin' || 'unknown'}}
       GOARCH: ${{ matrix.arch }}
+
+    permissions:
+      contents: write
+      pull-requests: write   
 
     steps:
     - name: Check out code

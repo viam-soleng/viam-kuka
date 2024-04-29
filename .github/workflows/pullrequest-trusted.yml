@@ -1,0 +1,20 @@
+
+name: Pull Request Update
+
+concurrency: 
+  group: pullrequest-${{ github.head_ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request_target:
+    branches: [ 'main' ]
+    types: [ 'labeled' ]
+
+# To test workflow updates you need to work in a branch directly on viam-soleng/viam-kuka
+# and tag your working branch instead of @main in any viam-soleng/viam-kuka "uses" below.
+# Don't forget to tag back to @main before merge.
+
+jobs:
+  test:
+    if: github.event.label.name == 'safe to test' 
+    uses: viam-soleng/viam-kuka/.github/workflows/test.yml@main

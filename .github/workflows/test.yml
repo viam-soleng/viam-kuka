@@ -10,16 +10,16 @@ jobs:
     strategy:
       matrix:
         include:
-          - arch: buildjet-8vcpu-ubuntu-2204
+          - arch: amd64
+            runner: [ubuntu-latest]
             image: ghcr.io/viamrobotics/rdk-devenv:amd64
-            platform: linux/amd64
-          - arch: buildjet-8vcpu-ubuntu-2204-arm
-            image: ghcr.io/viamrobotics/rdk-devenv:arm64
-            platform: linux/arm64
-    runs-on: ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
     container:
       image: ${{ matrix.image }}
-      options: --platform ${{ matrix.platform }}
+    env:
+      os: ${{contains(matrix.runner, 'ubuntu') && 'linux' || contains(matrix.runner, 'macos') && 'macos' || 'unknown'}}
+      GOOS: ${{contains(matrix.runner, 'ubuntu') && 'linux' || contains(matrix.runner, 'macos') && 'darwin' || 'unknown'}}
+      GOARCH: ${{ matrix.arch }}
     timeout-minutes: 45
     steps:
     # Can't directly comment without token having full read/write access
