@@ -16,13 +16,11 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: [ ubuntu-latest]
+            runner: [ubuntu-latest]
             image: ghcr.io/viamrobotics/rdk-devenv:amd64-cache
-            platform: amd64
           - arch: arm64
-            runner: [ ubuntu-latest]
+            runner: [macos-latest]
             image: ghcr.io/viamrobotics/rdk-devenv:arm64-cache
-            platform: arm64
     runs-on: ${{ matrix.runner }}
     container:
       image: ${{ matrix.image }}
