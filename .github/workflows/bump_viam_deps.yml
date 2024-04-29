@@ -14,9 +14,18 @@ jobs:
     name: Bump Viam Dependency Versions
     strategy:
       matrix:
-        runner: [ ubuntu-latest, macos-latest ]
-        arch: [ amd64, arm64 ]
+        include:
+          - arch: amd64
+            runner: [ ubuntu-latest]
+            image: ghcr.io/viamrobotics/rdk-devenv:amd64-cache
+            platform: amd64
+          - arch: arm64
+            runner: [ ubuntu-latest]
+            image: ghcr.io/viamrobotics/rdk-devenv:arm64-cache
+            platform: arm64
     runs-on: ${{ matrix.runner }}
+    container:
+      image: ${{ matrix.image }}
     env:
       os: ${{contains(matrix.runner, 'ubuntu') && 'linux' || contains(matrix.runner, 'macos') && 'macos' || 'unknown'}}
       GOOS: ${{contains(matrix.runner, 'ubuntu') && 'linux' || contains(matrix.runner, 'macos') && 'darwin' || 'unknown'}}
