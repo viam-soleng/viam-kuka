@@ -1,0 +1,53 @@
+name: Bump Versions
+
+concurrency: 
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  schedule:
+    - cron: '30 17 * * WED' # 12:30 EST on wednesdays
+  workflow_dispatch:
+
+jobs:
+  bump-versions:
+    name: Bump Package Versions
+    strategy:
+      matrix:
+        include:
+          - arch: buildjet-8vcpu-ubuntu-2204
+            image: ghcr.io/viamrobotics/rdk-devenv:amd64
+            platform: linux/amd64
+          - arch: buildjet-8vcpu-ubuntu-2204-arm
+            image: ghcr.io/viamrobotics/rdk-devenv:arm64
+            platform: linux/arm64
+    runs-on: ${{ matrix.arch }}
+    container:
+      image: ${{ matrix.image }}
+      options: --platform ${{ matrix.platform }}
+    timeout-minutes: 15
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v3
+    - name: Update go dependencies
+      id: gobump
+      run: |
+        sudo chown -R testbot .
+        sudo -u testbot bash -lc 'go get -u go.viam.com/api go.viam.com/rdk go.viam.com/utils'
+        sudo -u testbot bash -lc 'go mod tidy'
+        GEN_DIFF=$(git status -s)
+        
+        if [ -n "$GEN_DIFF" ]; then
+            echo "needs_pr=1" >> $GITHUB_OUTPUT
+        fi
+    - name: Add + Commit + Open PR
+      if: steps.gobump.outputs.needs_pr == 1
+      uses: peter-evans/create-pull-request@v5
+      with:
+          commit-message: '[WORKFLOW] Updating go dependencies'
+          branch: 'workflow/update-viam-dep'
+          delete-branch: true
+          base: main
+          title: Automated Go Dependencies Update
+          body: This is an auto-generated PR to update viam dependencies. Please confirm tests are passing before merging.
