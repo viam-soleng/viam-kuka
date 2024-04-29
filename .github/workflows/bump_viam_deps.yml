@@ -26,6 +26,10 @@ jobs:
       GOOS: ${{contains(matrix.runner, 'ubuntu') && 'linux' || contains(matrix.runner, 'macos') && 'darwin' || 'unknown'}}
       GOARCH: ${{ matrix.arch }}
 
+    permissions:
+      contents: write
+      pull-requests: write
+
     steps:
     - name: Check out code
       uses: actions/checkout@v3
