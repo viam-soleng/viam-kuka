@@ -6,7 +6,7 @@ on:
 
 jobs:
   build_and_test:
-    name: Build and Test viam-kuka
+    name: Build and Test
     strategy:
       matrix:
         include:

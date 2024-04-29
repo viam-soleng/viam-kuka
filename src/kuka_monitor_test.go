@@ -79,7 +79,7 @@ func TestHandleDeviceInfo(t *testing.T) {
 	}
 }
 
-func TestHandleCurrentState(t *testing.T) {
+func TestHandleJointLimit(t *testing.T) {
 	logger := logging.NewTestLogger(t)
 
 	kuka := &kukaArm{
@@ -102,7 +102,7 @@ func TestHandleCurrentState(t *testing.T) {
 	for _, tt := range jointLimitsTests {
 		kuka.currentState = state{jointLimits: make([]referenceframe.Limit, numJoints)}
 
-		t.Run(fmt.Sprintf("joint limits given %v", tt.description), func(t *testing.T) {
+		t.Run(tt.description, func(t *testing.T) {
 			kuka.handleMinJointPositions(tt.data)
 			kuka.handleMaxJointPositions(tt.data)
 			if tt.success {
@@ -117,32 +117,51 @@ func TestHandleCurrentState(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHandleJointPosition(t *testing.T) {
+	logger := logging.NewTestLogger(t)
+
+	kuka := &kukaArm{
+		logger:       logger,
+		stateMutex:   sync.Mutex{},
+		currentState: state{},
+		responseCh:   make(chan bool, 1),
+	}
 
 	jointPositionTests := []struct {
 		description string
 		data        []string
 		success     bool
-		checkCh     bool
 	}{
-		{description: "incorrect amount of data", data: []string{"0", "0", "0"}, success: false, checkCh: false},
-		{description: "correct amount of data bad format", data: []string{"1", "2", "3", "hi", "0", "0", "0", "0", "0", "0", "0", "0"}, success: false, checkCh: true},
-		{description: "correct amount of data", data: []string{"1", "2", "3", "0", "0", "0", "0", "0", "0", "0", "0", "0"}, success: true, checkCh: true},
+		{description: "incorrect amount of data", data: []string{"0", "0", "0"}, success: false},
+		{description: "correct amount of data bad format", data: []string{"1", "2", "3", "hi", "0", "0", "0", "0", "0", "0", "0", "0"}, success: false},
+		{description: "correct amount of data", data: []string{"1", "2", "3", "0", "0", "0", "0", "0", "0", "0", "0", "0"}, success: true},
 	}
 
 	for _, tt := range jointPositionTests {
 		kuka.currentState = state{}
 
-		t.Run(fmt.Sprintf("joint position given %v", tt.description), func(t *testing.T) {
+		t.Run(tt.description, func(t *testing.T) {
 			kuka.handleGetJointPositions(tt.data)
 			if tt.success {
-				resp := <-kuka.responseCh
-				test.That(t, resp, test.ShouldBeTrue)
 				expectedResult := helperStringListToFloats(tt.data[0:6])
 				test.That(t, kuka.currentState.joints, test.ShouldResemble, expectedResult)
 			} else {
 				test.That(t, kuka.currentState.joints, test.ShouldBeNil)
 			}
 		})
+	}
+}
+
+func TestHandleEndPosition(t *testing.T) {
+	logger := logging.NewTestLogger(t)
+
+	kuka := &kukaArm{
+		logger:       logger,
+		stateMutex:   sync.Mutex{},
+		currentState: state{},
+		responseCh:   make(chan bool, 1),
 	}
 
 	endPositionTests := []struct {
@@ -158,7 +177,7 @@ func TestHandleCurrentState(t *testing.T) {
 	for _, tt := range endPositionTests {
 		kuka.currentState = state{}
 
-		t.Run(fmt.Sprintf("end position given %v", tt.description), func(t *testing.T) {
+		t.Run(tt.description, func(t *testing.T) {
 			kuka.handleGetEndPositions(tt.data)
 			if tt.success {
 				dataFloats := helperStringListToFloats(tt.data)
@@ -175,6 +194,17 @@ func TestHandleCurrentState(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHandleProgramState(t *testing.T) {
+	logger := logging.NewTestLogger(t)
+
+	kuka := &kukaArm{
+		logger:       logger,
+		stateMutex:   sync.Mutex{},
+		currentState: state{},
+		responseCh:   make(chan bool, 1),
+	}
 
 	programStateTests := []struct {
 		description string
@@ -188,7 +218,7 @@ func TestHandleCurrentState(t *testing.T) {
 	for _, tt := range programStateTests {
 		kuka.currentState = state{}
 
-		t.Run(fmt.Sprintf("end position given %v", tt.description), func(t *testing.T) {
+		t.Run(tt.description, func(t *testing.T) {
 			kuka.handleProgramState(tt.data)
 			if tt.success {
 				test.That(t, kuka.currentState.programName, test.ShouldResemble, tt.data[0])
@@ -209,6 +239,7 @@ func TestHandleSuccess(t *testing.T) {
 		logger:       logger,
 		stateMutex:   sync.Mutex{},
 		currentState: state{isMoving: true},
+		responseCh:   make(chan bool, 1),
 	}
 
 	isMoving, err := kuka.IsMoving(ctx)
