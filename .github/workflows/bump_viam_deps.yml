@@ -11,21 +11,16 @@ on:
 
 jobs:
   bump-versions:
-    name: Bump Package Versions
+    name: Bump Viam Dependency Versions
     strategy:
       matrix:
-        include:
-          - arch: buildjet-8vcpu-ubuntu-2204
-            image: ghcr.io/viamrobotics/rdk-devenv:amd64
-            platform: linux/amd64
-          - arch: buildjet-8vcpu-ubuntu-2204-arm
-            image: ghcr.io/viamrobotics/rdk-devenv:arm64
-            platform: linux/arm64
-    runs-on: ${{ matrix.arch }}
-    container:
-      image: ${{ matrix.image }}
-      options: --platform ${{ matrix.platform }}
-    timeout-minutes: 15
+        runner: [ ubuntu-latest, macos-latest ]
+        arch: [ amd64, arm64 ]
+    runs-on: ${{ matrix.runner }}
+    env:
+      os: ${{contains(matrix.runner, 'ubuntu') && 'linux' || contains(matrix.runner, 'macos') && 'macos' || 'unknown'}}
+      GOOS: ${{contains(matrix.runner, 'ubuntu') && 'linux' || contains(matrix.runner, 'macos') && 'darwin' || 'unknown'}}
+      GOARCH: ${{ matrix.arch }}
 
     steps:
     - name: Check out code
