@@ -37,7 +37,7 @@ jobs:
       id: gobump
       run: |
         sudo chown -R testbot .
-        sudo -u testbot bash -lc 'go get -u go.viam.com/api go.viam.com/rdk go.viam.com/utils'
+        sudo -u testbot bash -lc 'go get -u go.viam.com/rdk'
         sudo -u testbot bash -lc 'go mod tidy'
         GEN_DIFF=$(git status -s)
         
