@@ -18,3 +18,19 @@ jobs:
   test:
     if: github.event.label.name == 'safe to test' 
     uses: viam-soleng/viam-kuka/.github/workflows/test.yml@main
+
+  slack-workflow-status:
+    name: Post Workflow Status To Slack
+    needs:
+      - test
+    runs-on: ubuntu-latest
+    permissions:
+      actions: 'read'
+    steps:
+      - name: Slack Workflow Notification
+        uses: Gamesight/slack-workflow-status@master
+        with:
+          repo_token: ${{secrets.GITHUB_TOKEN}}
+          slack_webhook_url: ${{secrets.SLACK_WEBHOOK_URL}}
+          channel: '#team-soleng-module-support'
+          name: 'Workflow Status'
