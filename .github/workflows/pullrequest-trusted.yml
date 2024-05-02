@@ -16,7 +16,7 @@ on:
 
 jobs:
   test:
-    if: github.event.label.name == 'safe to test' 
+    if: github.event.label.name == 'testing' 
     uses: viam-soleng/viam-kuka/.github/workflows/test.yml@main
 
   slack-workflow-status:
