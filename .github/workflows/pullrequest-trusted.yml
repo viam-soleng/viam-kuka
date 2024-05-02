@@ -33,4 +33,4 @@ jobs:
           repo_token: ${{secrets.GITHUB_TOKEN}}
           slack_webhook_url: ${{secrets.SLACK_WEBHOOK_URL}}
           channel: '#team-soleng-module-support'
-          name: 'Workflow Status'
+          name: 'Workflow Status (viam-kuka)'
