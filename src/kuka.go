@@ -15,6 +15,7 @@ import (
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/referenceframe"
 	"go.viam.com/rdk/resource"
+	"go.viam.com/rdk/services/motion"
 	"go.viam.com/rdk/spatialmath"
 
 	gutils "go.viam.com/utils"
@@ -242,7 +243,7 @@ func (kuka *kukaArm) JointPositions(ctx context.Context, extra map[string]interf
 // MoveToPosition moves the arm to the given absolute position. This will block until done or a new operation cancels this one.
 // This calls arm Move command that uses motion planning to make subsequent MoveToJointPositions to reach goal position.
 func (kuka *kukaArm) MoveToPosition(ctx context.Context, pose spatialmath.Pose, extra map[string]interface{}) error {
-	return arm.Move(ctx, kuka.logger, kuka, pose)
+	return motion.MoveArm(ctx, kuka.logger, kuka, pose)
 }
 
 // MoveToJointPositions moves the arm's joints to the given positions. This will block until done or a new operation cancels this one.
