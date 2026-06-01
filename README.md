@@ -4,10 +4,7 @@ This is a [Viam module](https://docs.viam.com/build-modules/overview/) for [KUKA
 
 ## Configure your KUKA Arm
 
-> [!NOTE]
-> Before configuring your Kuka Arm, you must [add a machine](https://docs.viam.com/how-tos/configure/).
-
-Navigate to the **CONFIGURE** tab of your machine’s page in [the Viam app](https://app.viam.com/). Click the **+** icon next to your machine part in the left-hand menu and select **Configuration Block**. Search for `viam-kuka` and select the `viam-kuka/viam-kuka` model. Click **Add to machine**, then enter a name and click **Add to machine**.
+[Add a machine](https://docs.viam.com/set-up-a-machine/first-machine/) in the Viam app.  Navigate to the **CONFIGURE** tab of your machine’s page in [the Viam app](https://app.viam.com/). Click the **+** icon next to your machine part in the left-hand menu and select **Configuration Block**. Search for `viam-kuka` and select the `viam-kuka/viam-kuka` model. Click **Add to machine**, then enter a name and click **Add to machine**.
 
 On the new component panel, copy and paste the following attribute template into your arm’s attributes field:
 
