@@ -1,20 +1,16 @@
 # Viam KUKA Module
 
-This is a [Viam module](https://docs.viam.com/manage/configuration/#modules) for [KUKA](https://www.kuka.com/en-us)'s family of industrial arms. This module provides a general framework for operating any compatible Kuka arm. This includes Kuka arm/controllers that use a TCP client connection and Kuka's EKI Manager.
-
-This viam-kuka module is particularly useful in applications that require a Kuka arm to be operated in conjunction with other resources (such as cameras, sensors, actuators, CV) offered by the [Viam Platform](https://www.viam.com/) and/or separate through your own code. 
-
-As an example, a recent demo was created utilizing a Kuka Arm, an [intelrealsense RGB-D camera](https://app.viam.com/module/viam/realsense), a [modbus](https://app.viam.com/module/viam-soleng/viam-modbus) connection to a PLC and [computer vision](https://docs.viam.com/ml/vision/) (YOLOv8) to create a mobile, face-tracking robot on the lookout for PPE equipment violators. 
+This is a [Viam module](https://docs.viam.com/operate/get-started/supported-hardware/) for [KUKA](https://www.kuka.com/en-us)'s family of industrial arms. This module provides a general framework for operating any compatible Kuka arm. This includes Kuka arm/controllers that use a TCP client connection and Kuka's EKI Manager.
 
 > [!NOTE]
-> For more information on modules, see [Modular Resources](https://docs.viam.com/registry/#modular-resources).
+> For more information on modules, see [Modular Resources](https://docs.viam.com/operate/get-started/supported-hardware/).
 
 ## Configure your KUKA Arm
 
 > [!NOTE]
-> Before configuring your Kuka Arm, you must [add a machine](https://docs.viam.com/fleet/machines/#add-a-new-machine).
+> Before configuring your Kuka Arm, you must [add a machine](https://docs.viam.com/how-tos/configure/).
 
-Navigate to the **CONFIGURE** tab of your machine’s page in [the Viam app](https://app.viam.com/). Click the **+** icon next to your machine part in the left-hand menu and select **Component**. Select the `arm` type, then search for and select the `arm / viam-kuka` model. Click **Add module**, then enter a name or use the suggested name for your arm and click **Create**.
+Navigate to the **CONFIGURE** tab of your machine’s page in [the Viam app](https://app.viam.com/). Click the **+** icon next to your machine part in the left-hand menu and select **Configuration Block**. Search for `viam-kuka` and select the `viam-kuka/viam-kuka` model. Click **Add to machine**, then enter a name and click **Add to machine**.
 
 On the new component panel, copy and paste the following attribute template into your arm’s attributes field:
 
@@ -31,7 +27,7 @@ On the new component panel, copy and paste the following attribute template into
 Edit the attributes as applicable.
 
 > [!NOTE]
-> For more information, see [Configure a Machine](https://docs.viam.com/build/configure/).
+> For more information, see [Configure your hardware](https://docs.viam.com/hardware/configure-hardware/).
 
 ## Attributes
 
@@ -55,9 +51,7 @@ Support for the following Arms has been confirmed. Additional arms that operate 
 
 ## Next steps
 
-- To test your arm, go to the [**CONTROL** tab](https://docs.viam.com/fleet/machines/#control).
-- To write code against your arm, use one of the [available SDKs](https://docs.viam.com/program/).
-- To view examples using an arm component, explore [these tutorials](https://docs.viam.com/tutorials/).
+- Learn more about [controlling your arm with Viam](https://docs.viam.com/motion-planning/move-an-arm/overview/).
 
 ## Further Work
 
