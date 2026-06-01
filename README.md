@@ -1,9 +1,6 @@
 # Viam KUKA Module
 
-This is a [Viam module](https://docs.viam.com/operate/get-started/supported-hardware/) for [KUKA](https://www.kuka.com/en-us)'s family of industrial arms. This module provides a general framework for operating any compatible Kuka arm. This includes Kuka arm/controllers that use a TCP client connection and Kuka's EKI Manager.
-
-> [!NOTE]
-> For more information on modules, see [Modular Resources](https://docs.viam.com/operate/get-started/supported-hardware/).
+This is a [Viam module](https://docs.viam.com/build-modules/overview/) for [KUKA](https://www.kuka.com/en-us)'s family of industrial arms. This module provides a general framework for operating any compatible Kuka arm. This includes Kuka arm/controllers that use a TCP client connection and Kuka's EKI Manager.
 
 ## Configure your KUKA Arm
 
@@ -25,9 +22,6 @@ On the new component panel, copy and paste the following attribute template into
 ```
 
 Edit the attributes as applicable.
-
-> [!NOTE]
-> For more information, see [Configure your hardware](https://docs.viam.com/hardware/configure-hardware/).
 
 ## Attributes
 
@@ -53,6 +47,6 @@ Support for the following Arms has been confirmed. Additional arms that operate 
 
 - Learn more about [controlling your arm with Viam](https://docs.viam.com/motion-planning/move-an-arm/overview/).
 
-## Further Work
+## Get Help
 
-To request additional features or models be added, please create a GitHub Issue or reach out to us on our [Discord channel](https://discord.com/channels/1083489952408539288). 
+For any questions please reach out to us on our [Discord channel](https://discord.com/channels/1083489952408539288). 
